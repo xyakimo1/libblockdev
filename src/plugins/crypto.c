@@ -2289,6 +2289,117 @@ gboolean bd_crypto_luks_convert (const gchar *device, BDCryptoLUKSVersion target
     return TRUE;
 }
 
+gboolean bd_crypto_luks_reencrypt(const gchar *device, BDCryptoLUKSReencryptParams *params, BDCryptoKeyslotContext *context, BDCryptoKeyslotContext *ncontext, GError **error) {
+    struct crypt_device *cd = NULL;
+    guint volume_key_size;
+    gchar *volume_key;
+    guint32 current_entropy = 0;
+    gint dev_random_fd = -1;
+    gint ret = 0;
+    guint64 progress_id = 0;
+    gchar *msg = NULL;
+    GError *l_error = NULL;
+
+    msg = g_strdup_printf ("Started reencryption of LUKS device '%s'", device);
+    progress_id = bd_utils_report_started (msg);
+    g_free (msg);
+
+    ret = crypt_init (&cd, device);
+    if (ret != 0) {
+        g_set_error (&l_error, BD_CRYPTO_ERROR, BD_CRYPTO_ERROR_DEVICE,
+                     "Failed to initialize device: %s", strerror_l (-ret, c_locale));
+        bd_utils_report_finished (progress_id, l_error->message);
+        g_propagate_error (error, l_error);
+        return FALSE;
+    }
+
+    ret = crypt_load (cd, CRYPT_LUKS, NULL);
+    if (ret != 0) {
+        g_set_error (&l_error, BD_CRYPTO_ERROR, BD_CRYPTO_ERROR_DEVICE,
+                     "Failed to load device: %s", strerror_l (-ret, c_locale));
+        crypt_free (cd);
+        bd_utils_report_finished (progress_id, l_error->message);
+        g_propagate_error (error, l_error);
+        return FALSE;
+    }
+
+    if (ncontext->type != BD_CRYPTO_KEYSLOT_CONTEXT_TYPE_PASSPHRASE) {
+        g_set_error (&l_error, BD_CRYPTO_ERROR, BD_CRYPTO_ERROR_INVALID_CONTEXT,
+                     "Only 'passphrase' and context types are supported for LUKS reencrypt.");
+        bd_utils_report_finished (progress_id, l_error->message);
+        g_propagate_error (error, l_error);
+        crypt_free (cd);
+        return FALSE;
+    }
+
+    // Generate new volume key
+    volume_key_size = params->volume_key_size / 8; // convert bits to bytes.
+    volume_key = g_malloc (volume_key_size);
+    if (volume_key == NULL) {
+        g_set_error (&l_error, BD_CRYPTO_ERROR, BD_CRYPTO_ERROR_ADD_KEY,
+                     "Failed to generate volume key: malloc failed.");
+        bd_utils_report_finished (progress_id, l_error->message);
+        g_propagate_error (error, l_error);
+        crypt_free (cd);
+        return FALSE;
+    }
+
+    dev_random_fd = open ("/dev/random", O_RDONLY);
+    if (dev_random_fd >= 0) {
+        ioctl (dev_random_fd, RNDGETENTCNT, &current_entropy);
+        while (current_entropy < volume_key_size) {
+            bd_utils_report_progress (progress_id, 0, "Waiting for enough random data entropy");
+            sleep (1);
+            ioctl (dev_random_fd, RNDGETENTCNT, &current_entropy);
+        }
+
+        ret = read (dev_random_fd, volume_key, volume_key_size);
+        close (dev_random_fd);
+        if (ret != (gint) volume_key_size) {
+            g_set_error (&l_error, BD_CRYPTO_ERROR, BD_CRYPTO_ERROR_ADD_KEY,
+                         "Volume key generation failed.");
+            g_free (volume_key);
+            crypt_free (cd);
+            bd_utils_report_finished (progress_id, l_error->message);
+            g_propagate_error (error, l_error);
+            return FALSE;
+        }
+        bd_utils_report_progress (progress_id, 5, "Generated volume key.");
+
+    } else {
+        g_set_error (&l_error, BD_CRYPTO_ERROR, BD_CRYPTO_ERROR_FORMAT_FAILED,
+                     "Failed to check random data entropy level");
+        g_free (volume_key);
+        crypt_free (cd);
+        bd_utils_report_finished (progress_id, l_error->message);
+        g_propagate_error (error, l_error);
+        return FALSE;
+    }
+
+
+
+    ret = crypt_keyslot_add_by_key(cd,
+                                   CRYPT_ANY_SLOT,
+                                   volume_key,
+                                   volume_key_size,
+                                   (const char*) ncontext->u.passphrase.pass_data,
+                                   ncontext->u.passphrase.data_len,
+                                   0);
+    g_free(volume_key);
+    if (ret < 0) {
+        g_set_error(&l_error, BD_CRYPTO_ERROR, BD_CRYPTO_ERROR_ADD_KEY,
+                    "Failed to add key: %s", strerror_l(-ret, c_locale));
+        bd_utils_report_finished(progress_id, l_error->message);
+        g_propagate_error(error, l_error);
+        crypt_free(cd);
+        return FALSE;
+    }
+    
+    context->u.passphrase.pass_data = NULL; // temporarily surpress unused warning
+    bd_utils_report_finished(progress_id, "Completed.");
+    return TRUE;
+}
+
 static gint synced_close (gint fd) {
     gint ret = 0;
     ret = fsync (fd);

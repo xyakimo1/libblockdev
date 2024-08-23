@@ -294,6 +294,37 @@ gboolean bd_crypto_luks_set_label (const gchar *device, const gchar *label, cons
 gboolean bd_crypto_luks_set_uuid (const gchar *device, const gchar *uuid, GError **error);
 gboolean bd_crypto_luks_convert (const gchar *device, BDCryptoLUKSVersion target_version, GError **error);
 
+/**
+ * BDCryptoLUKSReencryptParams:
+ * @data_alignment: data alignment in sectors, 0 for default/auto detection
+ * @data_device: detached encrypted data device or NULL
+ * @integrity: integrity algorithm (e.g. "hmac-sha256") or NULL for no integrity support
+ *             Note: this field is valid only for LUKS 2
+ * @sector_size: encryption sector size, 0 for default (512)
+ *               Note: this field is valid only for LUKS 2
+ * @label: LUKS header label or NULL
+ *         Note: this field is valid only for LUKS 2
+ * @subsystem: LUKS header subsystem or NULL
+ *             Note: this field is valid only for LUKS 2
+ * @pbkdf: key derivation function specification or NULL for default
+ *         Note: this field is valid only for LUKS 2
+ */
+typedef struct BDCryptoLUKSReencryptParams {
+    guint32 key_size;
+    gchar *cipher;
+    gchar *cipher_mode;
+    gchar *resilience;
+    gchar *hash;
+    guint64 max_hotzone_size;
+    guint32 sector_size;
+    gboolean new_volume_key;
+    guint volume_key_size;
+    gboolean offline;
+    BDCryptoLUKSPBKDF *pbkdf;
+} BDCryptoLUKSReencryptParams;
+
+gboolean bd_crypto_luks_reencrypt(const gchar *device, BDCryptoLUKSReencryptParams *params, BDCryptoKeyslotContext *context, BDCryptoKeyslotContext *ncontext, GError **error);
+
 BDCryptoLUKSInfo* bd_crypto_luks_info (const gchar *device, GError **error);
 BDCryptoBITLKInfo* bd_crypto_bitlk_info (const gchar *device, GError **error);
 BDCryptoIntegrityInfo* bd_crypto_integrity_info (const gchar *device, GError **error);
