@@ -1111,6 +1111,131 @@ gboolean bd_crypto_luks_set_uuid (const gchar *device, const gchar *uuid, GError
  */
 gboolean bd_crypto_luks_convert (const gchar *device, BDCryptoLUKSVersion target_version, GError **error);
 
+
+#define BD_CRYPTO_TYPE_LUKS_REENCRYPT_PARAMS (bd_crypto_luks_reencrypt_params_get_type ())
+GType bd_crypto_luks_reencrypt_params_get_type();
+
+// TODO
+/**
+ * BDCryptoLUKSReencryptParams:
+ * @key_size    New volume key size if @new_volume_key is true.
+ * @cipher      New cipher.
+ * @cipher_mode     New cipher mode.
+ * @resilience      Resilience.
+ * @hash            Hash.
+ * @max_hotzone_size Max hotzone size.
+ * @sector_size      Sector size.
+ * @new_volume_key   Whether to generate a new volume key or keep the existing one.
+ * @offline          Whether to perform an offline or online reencryption.
+ * @pbkdf            PBDKF function parameters for the new keyslot.
+ */
+typedef struct BDCryptoLUKSReencryptParams {
+    guint32 key_size;
+    gchar *cipher;
+    gchar *cipher_mode;
+    gchar *resilience;
+    gchar *hash;
+    guint64 max_hotzone_size;
+    guint32 sector_size;
+    gboolean new_volume_key;
+    gboolean offline;
+    BDCryptoLUKSPBKDF *pbkdf;
+} BDCryptoLUKSReencryptParams;
+
+/**
+ * bd_crypto_luks_reencrypt_params_copy: (skip)
+ * @param params
+ * @return
+ */
+BDCryptoLUKSReencryptParams* bd_crypto_luks_reencrypt_params_copy (BDCryptoLUKSReencryptParams* params) {
+    if (params == NULL)
+        return NULL;
+
+    BDCryptoLUKSReencryptParams *new_params = g_new0 (BDCryptoLUKSReencryptParams, 1);
+    new_params->key_size = params->key_size;
+    new_params->cipher = g_strdup (params->cipher);
+    new_params->cipher_mode = g_strdup (params->cipher_mode);
+    new_params->resilience = g_strdup (params->resilience);
+    new_params->hash = g_strdup (params->hash);
+    new_params->max_hotzone_size = params->max_hotzone_size;
+    new_params->sector_size = params->sector_size;
+    new_params->new_volume_key = params->new_volume_key;
+    new_params->offline = params->offline;
+    new_params->pbkdf = bd_crypto_luks_pbkdf_copy(params->pbkdf);
+
+    return new_params;
+}
+
+/**
+ * bd_crypto_luks_reencrypt_params_free: (skip)
+ * @param params
+ */
+void bd_crypto_luks_reencrypt_params_free (BDCryptoLUKSReencryptParams* params) {
+    if (params == NULL)
+        return;
+
+    g_free (params->cipher);
+    g_free (params->cipher_mode);
+    g_free (params->resilience);
+    g_free (params->hash);
+    bd_crypto_luks_pbkdf_free(params->pbkdf);
+}
+
+/**
+ * bd_crypto_luks_reencrypt_params_new: (constructor)
+ * @param key_size
+ * @param cipher
+ * @param cipher_mode
+ * @param resilience
+ * @param hash
+ * @param max_hotzone_size
+ * @param sector_size
+ * @param new_volume_key
+ * @param offline
+ * @param pbkdf
+ * @return
+ */
+BDCryptoLUKSReencryptParams* bd_crypto_luks_reencrypt_params_new (guint32 key_size, gchar *cipher, gchar *cipher_mode, gchar *resilience, gchar *hash, guint64 max_hotzone_size, guint32 sector_size, gboolean new_volume_key, gboolean offline, BDCryptoLUKSPBKDF *pbkdf) {
+    BDCryptoLUKSReencryptParams *ret = g_new0 (BDCryptoLUKSReencryptParams, 1);
+    ret->key_size = key_size;
+    ret->cipher = g_strdup (cipher);
+    ret->cipher_mode = g_strdup (cipher_mode);
+    ret->resilience = g_strdup (resilience);
+    ret->hash = g_strdup (hash);
+    ret->max_hotzone_size = max_hotzone_size;
+    ret->sector_size = sector_size;
+    ret->new_volume_key = new_volume_key;
+    ret->offline = offline;
+    ret->pbkdf = bd_crypto_luks_pbkdf_copy(pbkdf);
+
+    return ret;
+}
+
+GType bd_crypto_luks_reencrypt_params_get_type () {
+    static GType type = 0;
+
+    if (G_UNLIKELY(type == 0)) {
+        type = g_boxed_type_register_static("BDCryptoLUKSReencryptParams",
+                                            (GBoxedCopyFunc) bd_crypto_luks_reencrypt_params_copy,
+                                            (GBoxedFreeFunc) bd_crypto_luks_reencrypt_params_free);
+    }
+
+    return type;
+}
+
+/**
+ * TODO
+ *
+ * @param device
+ * @param params
+ * @param context
+ * @param ncontext
+ * @param error
+ * @return
+ */
+gboolean bd_crypto_luks_reencrypt(const gchar *device, BDCryptoLUKSReencryptParams *params, BDCryptoKeyslotContext *context, BDCryptoKeyslotContext *ncontext, GError **error);
+
+
 /**
  * bd_crypto_luks_info:
  * @device: a device to get information about

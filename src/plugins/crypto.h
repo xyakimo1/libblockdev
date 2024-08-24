@@ -294,20 +294,19 @@ gboolean bd_crypto_luks_set_label (const gchar *device, const gchar *label, cons
 gboolean bd_crypto_luks_set_uuid (const gchar *device, const gchar *uuid, GError **error);
 gboolean bd_crypto_luks_convert (const gchar *device, BDCryptoLUKSVersion target_version, GError **error);
 
+// TODO
 /**
  * BDCryptoLUKSReencryptParams:
- * @data_alignment: data alignment in sectors, 0 for default/auto detection
- * @data_device: detached encrypted data device or NULL
- * @integrity: integrity algorithm (e.g. "hmac-sha256") or NULL for no integrity support
- *             Note: this field is valid only for LUKS 2
- * @sector_size: encryption sector size, 0 for default (512)
- *               Note: this field is valid only for LUKS 2
- * @label: LUKS header label or NULL
- *         Note: this field is valid only for LUKS 2
- * @subsystem: LUKS header subsystem or NULL
- *             Note: this field is valid only for LUKS 2
- * @pbkdf: key derivation function specification or NULL for default
- *         Note: this field is valid only for LUKS 2
+ * @key_size    New volume key size if @new_volume_key is true.
+ * @cipher      New cipher.
+ * @cipher_mode     New cipher mode.
+ * @resilience      Resilience.
+ * @hash            Hash.
+ * @max_hotzone_size Max hotzone size.
+ * @sector_size      Sector size.
+ * @new_volume_key   Whether to generate a new volume key or keep the existing one.
+ * @offline          Whether to perform an offline or online reencryption.
+ * @pbkdf            PBDKF function parameters for the new keyslot.
  */
 typedef struct BDCryptoLUKSReencryptParams {
     guint32 key_size;
@@ -318,10 +317,14 @@ typedef struct BDCryptoLUKSReencryptParams {
     guint64 max_hotzone_size;
     guint32 sector_size;
     gboolean new_volume_key;
-    guint volume_key_size;
     gboolean offline;
     BDCryptoLUKSPBKDF *pbkdf;
 } BDCryptoLUKSReencryptParams;
+
+void bd_crypto_luks_reencrypt_params_free (BDCryptoLUKSReencryptParams* params);
+BDCryptoLUKSReencryptParams* bd_crypto_luks_reencrypt_params_copy (BDCryptoLUKSReencryptParams* params);
+BDCryptoLUKSReencryptParams* bd_crypto_luks_reencrypt_params_new(guint32 key_size, gchar *cipher, gchar *cipher_mode, gchar *resilience, gchar *hash, guint64 max_hotzone_size, guint32 sector_size, gboolean new_volume_key, gboolean offline, BDCryptoLUKSPBKDF *pbkdf);
+
 
 gboolean bd_crypto_luks_reencrypt(const gchar *device, BDCryptoLUKSReencryptParams *params, BDCryptoKeyslotContext *context, BDCryptoKeyslotContext *ncontext, GError **error);
 

@@ -1204,6 +1204,27 @@ class CryptoTestConvert(CryptoTestCase):
         self.assertEqual(info.version, BlockDev.CryptoLUKSVersion.LUKS2)
 
 
+class CryptoTestReencrypt(CryptoTestCase):
+    @tag_test(TestTags.SLOW, TestTags.CORE)
+    def test_simple_reencryption(self):
+        """ Verify that a simple reencryption case works """
+        self._luks2_format(self.loop_dev, PASSWD)
+
+        ctx = BlockDev.CryptoKeyslotContext(passphrase=PASSWD)
+        nctx = BlockDev.CryptoKeyslotContext(passphrase=PASSWD2)
+        params = BlockDev.CryptoLUKSReencryptParams.new(
+            key_size=256,
+            cipher="aes",
+            cipher_mode="cbc-essiv:sha256",
+            resilience="checksum",
+            hash="sha256",
+            max_hotzone_size=0,
+            sector_size=512,
+            new_volume_key=True,
+            offline=False,
+            pbkdf=BlockDev.CryptoLUKSPBKDF()
+        )
+
 class CryptoTestLuksSectorSize(CryptoTestCase):
     def setUp(self):
         if not check_cryptsetup_version("2.4.0"):

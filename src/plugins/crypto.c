@@ -2289,9 +2289,57 @@ gboolean bd_crypto_luks_convert (const gchar *device, BDCryptoLUKSVersion target
     return TRUE;
 }
 
+BDCryptoLUKSReencryptParams* bd_crypto_luks_reencrypt_params_copy (BDCryptoLUKSReencryptParams* params) {
+    if (params == NULL)
+        return NULL;
+
+    BDCryptoLUKSReencryptParams *new_params = g_new0 (BDCryptoLUKSReencryptParams, 1);
+    new_params->key_size = params->key_size;
+    new_params->cipher = g_strdup (params->cipher);
+    new_params->cipher_mode = g_strdup (params->cipher_mode);
+    new_params->resilience = g_strdup (params->resilience);
+    new_params->hash = g_strdup (params->hash);
+    new_params->max_hotzone_size = params->max_hotzone_size;
+    new_params->sector_size = params->sector_size;
+    new_params->new_volume_key = params->new_volume_key;
+    new_params->offline = params->offline;
+    new_params->pbkdf = bd_crypto_luks_pbkdf_copy(params->pbkdf);
+
+    return new_params;
+}
+
+void bd_crypto_luks_reencrypt_params_free (BDCryptoLUKSReencryptParams* params) {
+    if (params == NULL)
+        return;
+
+    g_free (params->cipher);
+    g_free (params->cipher_mode);
+    g_free (params->resilience);
+    g_free (params->hash);
+    bd_crypto_luks_pbkdf_free(params->pbkdf);
+}
+
+BDCryptoLUKSReencryptParams* bd_crypto_luks_reencrypt_params_new (guint32 key_size, gchar *cipher, gchar *cipher_mode, gchar *resilience, gchar *hash, guint64 max_hotzone_size, guint32 sector_size, gboolean new_volume_key, gboolean offline, BDCryptoLUKSPBKDF *pbkdf) {
+    BDCryptoLUKSReencryptParams *ret = g_new0 (BDCryptoLUKSReencryptParams, 1);
+    ret->key_size = key_size;
+    ret->cipher = g_strdup (cipher);
+    ret->cipher_mode = g_strdup (cipher_mode);
+    ret->resilience = g_strdup (resilience);
+    ret->hash = g_strdup (hash);
+    ret->max_hotzone_size = max_hotzone_size;
+    ret->sector_size = sector_size;
+    ret->new_volume_key = new_volume_key;
+    ret->offline = offline;
+    ret->pbkdf = bd_crypto_luks_pbkdf_copy(pbkdf);
+
+    return ret;
+}
+
+
+
 gboolean bd_crypto_luks_reencrypt(const gchar *device, BDCryptoLUKSReencryptParams *params, BDCryptoKeyslotContext *context, BDCryptoKeyslotContext *ncontext, GError **error) {
     struct crypt_device *cd = NULL;
-    guint volume_key_size;
+    guint key_size;
     gchar *volume_key;
     guint32 current_entropy = 0;
     gint dev_random_fd = -1;
@@ -2333,8 +2381,8 @@ gboolean bd_crypto_luks_reencrypt(const gchar *device, BDCryptoLUKSReencryptPara
     }
 
     // Generate new volume key
-    volume_key_size = params->volume_key_size / 8; // convert bits to bytes.
-    volume_key = g_malloc (volume_key_size);
+    key_size = params->key_size / 8; // convert bits to bytes.
+    volume_key = g_malloc (key_size);
     if (volume_key == NULL) {
         g_set_error (&l_error, BD_CRYPTO_ERROR, BD_CRYPTO_ERROR_ADD_KEY,
                      "Failed to generate volume key: malloc failed.");
@@ -2347,15 +2395,15 @@ gboolean bd_crypto_luks_reencrypt(const gchar *device, BDCryptoLUKSReencryptPara
     dev_random_fd = open ("/dev/random", O_RDONLY);
     if (dev_random_fd >= 0) {
         ioctl (dev_random_fd, RNDGETENTCNT, &current_entropy);
-        while (current_entropy < volume_key_size) {
+        while (current_entropy < key_size) {
             bd_utils_report_progress (progress_id, 0, "Waiting for enough random data entropy");
             sleep (1);
             ioctl (dev_random_fd, RNDGETENTCNT, &current_entropy);
         }
 
-        ret = read (dev_random_fd, volume_key, volume_key_size);
+        ret = read (dev_random_fd, volume_key, key_size);
         close (dev_random_fd);
-        if (ret != (gint) volume_key_size) {
+        if (ret != (gint) key_size) {
             g_set_error (&l_error, BD_CRYPTO_ERROR, BD_CRYPTO_ERROR_ADD_KEY,
                          "Volume key generation failed.");
             g_free (volume_key);
@@ -2381,7 +2429,7 @@ gboolean bd_crypto_luks_reencrypt(const gchar *device, BDCryptoLUKSReencryptPara
     ret = crypt_keyslot_add_by_key(cd,
                                    CRYPT_ANY_SLOT,
                                    volume_key,
-                                   volume_key_size,
+                                   key_size,
                                    (const char*) ncontext->u.passphrase.pass_data,
                                    ncontext->u.passphrase.data_len,
                                    0);
