@@ -1225,6 +1225,8 @@ class CryptoTestReencrypt(CryptoTestCase):
             pbkdf=BlockDev.CryptoLUKSPBKDF()
         )
 
+        BlockDev.crypto_luks_reencrypt(self.loop_dev, params, ctx, nctx)
+
 class CryptoTestLuksSectorSize(CryptoTestCase):
     def setUp(self):
         if not check_cryptsetup_version("2.4.0"):
