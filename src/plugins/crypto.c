@@ -2338,11 +2338,9 @@ BDCryptoLUKSReencryptParams* bd_crypto_luks_reencrypt_params_new (guint32 key_si
 
 
 gboolean bd_crypto_luks_reencrypt(const gchar *device, BDCryptoLUKSReencryptParams *params, BDCryptoKeyslotContext *context, BDCryptoKeyslotContext *ncontext, GError **error) {
+    const uint32_t KEYSLOT_FLAGS = CRYPT_VOLUME_KEY_NO_SEGMENT;
     struct crypt_device *cd = NULL;
     guint key_size;
-    gchar *volume_key;
-    guint32 current_entropy = 0;
-    gint dev_random_fd = -1;
     gint ret = 0;
     guint64 progress_id = 0;
     gchar *msg = NULL;
@@ -2380,60 +2378,14 @@ gboolean bd_crypto_luks_reencrypt(const gchar *device, BDCryptoLUKSReencryptPara
         return FALSE;
     }
 
-    // Generate new volume key
-    key_size = params->key_size / 8; // convert bits to bytes.
-    volume_key = g_malloc (key_size);
-    if (volume_key == NULL) {
-        g_set_error (&l_error, BD_CRYPTO_ERROR, BD_CRYPTO_ERROR_ADD_KEY,
-                     "Failed to generate volume key: malloc failed.");
-        bd_utils_report_finished (progress_id, l_error->message);
-        g_propagate_error (error, l_error);
-        crypt_free (cd);
-        return FALSE;
-    }
-
-    dev_random_fd = open ("/dev/random", O_RDONLY);
-    if (dev_random_fd >= 0) {
-        ioctl (dev_random_fd, RNDGETENTCNT, &current_entropy);
-        while (current_entropy < key_size) {
-            bd_utils_report_progress (progress_id, 0, "Waiting for enough random data entropy");
-            sleep (1);
-            ioctl (dev_random_fd, RNDGETENTCNT, &current_entropy);
-        }
-
-        ret = read (dev_random_fd, volume_key, key_size);
-        close (dev_random_fd);
-        if (ret != (gint) key_size) {
-            g_set_error (&l_error, BD_CRYPTO_ERROR, BD_CRYPTO_ERROR_ADD_KEY,
-                         "Volume key generation failed.");
-            g_free (volume_key);
-            crypt_free (cd);
-            bd_utils_report_finished (progress_id, l_error->message);
-            g_propagate_error (error, l_error);
-            return FALSE;
-        }
-        bd_utils_report_progress (progress_id, 5, "Generated volume key.");
-
-    } else {
-        g_set_error (&l_error, BD_CRYPTO_ERROR, BD_CRYPTO_ERROR_FORMAT_FAILED,
-                     "Failed to check random data entropy level");
-        g_free (volume_key);
-        crypt_free (cd);
-        bd_utils_report_finished (progress_id, l_error->message);
-        g_propagate_error (error, l_error);
-        return FALSE;
-    }
-
-
-
+    key_size = params->key_size / 8; // convert bits to bytes
     ret = crypt_keyslot_add_by_key(cd,
                                    CRYPT_ANY_SLOT,
-                                   volume_key,
+                                   NULL, // Let libcryptsetup generate new volume key for us (CRYPT_VOLUME_KEY_NO_SEGMENT flag).
                                    key_size,
                                    (const char*) ncontext->u.passphrase.pass_data,
                                    ncontext->u.passphrase.data_len,
-                                   0);
-    g_free(volume_key);
+                                   KEYSLOT_FLAGS);
     if (ret < 0) {
         g_set_error(&l_error, BD_CRYPTO_ERROR, BD_CRYPTO_ERROR_ADD_KEY,
                     "Failed to add key: %s", strerror_l(-ret, c_locale));
