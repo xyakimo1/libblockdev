@@ -51,6 +51,8 @@ class CryptoTestCase(unittest.TestCase):
             BlockDev.init(cls.requested_plugins, None)
         else:
             BlockDev.reinit(cls.requested_plugins, True, None)
+        BlockDev.utils_init_logging(print)
+
 
     def setUp(self):
         self.addCleanup(self._clean_up)
@@ -1211,7 +1213,8 @@ class CryptoTestReencrypt(CryptoTestCase):
         self._luks2_format(self.loop_dev, PASSWD)
 
         ctx = BlockDev.CryptoKeyslotContext(passphrase=PASSWD)
-        nctx = BlockDev.CryptoKeyslotContext(passphrase=PASSWD2)
+        nctx = BlockDev.CryptoKeyslotContext(passphrase=PASSWD2) # Doesn't work
+        #nctx = BlockDev.CryptoKeyslotContext(passphrase=PASSWD) # Works
         params = BlockDev.CryptoLUKSReencryptParams.new(
             key_size=256,
             cipher="aes",

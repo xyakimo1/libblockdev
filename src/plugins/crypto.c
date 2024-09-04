@@ -2340,7 +2340,11 @@ BDCryptoLUKSReencryptParams* bd_crypto_luks_reencrypt_params_new (guint32 key_si
 gboolean bd_crypto_luks_reencrypt(const gchar *device, BDCryptoLUKSReencryptParams *params, BDCryptoKeyslotContext *context, BDCryptoKeyslotContext *ncontext, GError **error) {
     const uint32_t KEYSLOT_FLAGS = CRYPT_VOLUME_KEY_NO_SEGMENT;
     struct crypt_device *cd = NULL;
+    struct crypt_params_reencrypt paramsReencrypt = {};
+    struct crypt_params_luks2 paramsLuks2 = {};
+
     guint key_size;
+    int allocated_keyslot;
     gint ret = 0;
     guint64 progress_id = 0;
     gchar *msg = NULL;
@@ -2394,8 +2398,39 @@ gboolean bd_crypto_luks_reencrypt(const gchar *device, BDCryptoLUKSReencryptPara
         crypt_free(cd);
         return FALSE;
     }
-    
-    context->u.passphrase.pass_data = NULL; // temporarily surpress unused warning
+    allocated_keyslot = ret;
+
+    paramsReencrypt.mode = CRYPT_REENCRYPT_REENCRYPT;
+    paramsReencrypt.direction = CRYPT_REENCRYPT_FORWARD;
+    paramsReencrypt.resilience = params->resilience; // duplicate string?
+    paramsReencrypt.hash = params->hash;
+    paramsReencrypt.data_shift = 0;
+    paramsReencrypt.max_hotzone_size = params->max_hotzone_size;
+    paramsReencrypt.device_size = 0;
+    paramsReencrypt.luks2 = &paramsLuks2;
+
+    paramsLuks2.sector_size = 512;
+    paramsLuks2.pbkdf = get_pbkdf_params (params->pbkdf, error);
+
+    // Initialize reencryption
+    ret = crypt_reencrypt_init_by_passphrase (cd,
+                                              NULL,
+                                              (const char *) context->u.passphrase.pass_data,
+                                              context->u.passphrase.data_len,
+                                              CRYPT_ANY_SLOT,
+                                              allocated_keyslot,
+                                              params->cipher,
+                                              params->cipher_mode,
+                                              &paramsReencrypt);
+    if (ret < 0) {
+        g_set_error(&l_error, BD_CRYPTO_ERROR, BD_CRYPTO_ERROR_ADD_KEY,
+                    "Failed to initialize reencryption: %s", strerror_l(-ret, c_locale));
+        bd_utils_report_finished(progress_id, l_error->message);
+        g_propagate_error(error, l_error);
+        crypt_free(cd);
+        return FALSE;
+    }
+
     bd_utils_report_finished(progress_id, "Completed.");
     return TRUE;
 }
