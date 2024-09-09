@@ -2337,7 +2337,7 @@ BDCryptoLUKSReencryptParams* bd_crypto_luks_reencrypt_params_new (guint32 key_si
 
 
 
-gboolean bd_crypto_luks_reencrypt(const gchar *device, BDCryptoLUKSReencryptParams *params, BDCryptoKeyslotContext *context, BDCryptoKeyslotContext *ncontext, GError **error) {
+gboolean bd_crypto_luks_reencrypt(const gchar *device, BDCryptoLUKSReencryptParams *params, BDCryptoKeyslotContext *context, GError **error) {
     const uint32_t KEYSLOT_FLAGS = CRYPT_VOLUME_KEY_NO_SEGMENT;
     struct crypt_device *cd = NULL;
     struct crypt_params_reencrypt paramsReencrypt = {};
@@ -2373,9 +2373,9 @@ gboolean bd_crypto_luks_reencrypt(const gchar *device, BDCryptoLUKSReencryptPara
         return FALSE;
     }
 
-    if (ncontext->type != BD_CRYPTO_KEYSLOT_CONTEXT_TYPE_PASSPHRASE) {
+    if (context->type != BD_CRYPTO_KEYSLOT_CONTEXT_TYPE_PASSPHRASE) {
         g_set_error (&l_error, BD_CRYPTO_ERROR, BD_CRYPTO_ERROR_INVALID_CONTEXT,
-                     "Only 'passphrase' and context types are supported for LUKS reencrypt.");
+                     "Only the 'passphrase' context type is supported for LUKS reencrypt.");
         bd_utils_report_finished (progress_id, l_error->message);
         g_propagate_error (error, l_error);
         crypt_free (cd);
@@ -2387,8 +2387,8 @@ gboolean bd_crypto_luks_reencrypt(const gchar *device, BDCryptoLUKSReencryptPara
                                    CRYPT_ANY_SLOT,
                                    NULL, // Let libcryptsetup generate new volume key for us (CRYPT_VOLUME_KEY_NO_SEGMENT flag).
                                    key_size,
-                                   (const char*) ncontext->u.passphrase.pass_data,
-                                   ncontext->u.passphrase.data_len,
+                                   (const char*) context->u.passphrase.pass_data,
+                                   context->u.passphrase.data_len,
                                    KEYSLOT_FLAGS);
     if (ret < 0) {
         g_set_error(&l_error, BD_CRYPTO_ERROR, BD_CRYPTO_ERROR_ADD_KEY,

@@ -1229,11 +1229,10 @@ GType bd_crypto_luks_reencrypt_params_get_type () {
  * @param device
  * @param params
  * @param context
- * @param ncontext
  * @param error
  * @return
  */
-gboolean bd_crypto_luks_reencrypt(const gchar *device, BDCryptoLUKSReencryptParams *params, BDCryptoKeyslotContext *context, BDCryptoKeyslotContext *ncontext, GError **error);
+gboolean bd_crypto_luks_reencrypt(const gchar *device, BDCryptoLUKSReencryptParams *params, BDCryptoKeyslotContext *context, GError **error);
 
 
 /**

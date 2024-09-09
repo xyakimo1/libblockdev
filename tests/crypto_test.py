@@ -1213,8 +1213,6 @@ class CryptoTestReencrypt(CryptoTestCase):
         self._luks2_format(self.loop_dev, PASSWD)
 
         ctx = BlockDev.CryptoKeyslotContext(passphrase=PASSWD)
-        nctx = BlockDev.CryptoKeyslotContext(passphrase=PASSWD2) # Doesn't work
-        #nctx = BlockDev.CryptoKeyslotContext(passphrase=PASSWD) # Works
         params = BlockDev.CryptoLUKSReencryptParams.new(
             key_size=256,
             cipher="aes",
@@ -1228,7 +1226,7 @@ class CryptoTestReencrypt(CryptoTestCase):
             pbkdf=BlockDev.CryptoLUKSPBKDF()
         )
 
-        BlockDev.crypto_luks_reencrypt(self.loop_dev, params, ctx, nctx)
+        BlockDev.crypto_luks_reencrypt(self.loop_dev, params, ctx)
 
 class CryptoTestLuksSectorSize(CryptoTestCase):
     def setUp(self):

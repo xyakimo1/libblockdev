@@ -326,7 +326,7 @@ BDCryptoLUKSReencryptParams* bd_crypto_luks_reencrypt_params_copy (BDCryptoLUKSR
 BDCryptoLUKSReencryptParams* bd_crypto_luks_reencrypt_params_new(guint32 key_size, gchar *cipher, gchar *cipher_mode, gchar *resilience, gchar *hash, guint64 max_hotzone_size, guint32 sector_size, gboolean new_volume_key, gboolean offline, BDCryptoLUKSPBKDF *pbkdf);
 
 
-gboolean bd_crypto_luks_reencrypt(const gchar *device, BDCryptoLUKSReencryptParams *params, BDCryptoKeyslotContext *context, BDCryptoKeyslotContext *ncontext, GError **error);
+gboolean bd_crypto_luks_reencrypt(const gchar *device, BDCryptoLUKSReencryptParams *params, BDCryptoKeyslotContext *context, GError **error);
 
 BDCryptoLUKSInfo* bd_crypto_luks_info (const gchar *device, GError **error);
 BDCryptoBITLKInfo* bd_crypto_bitlk_info (const gchar *device, GError **error);
