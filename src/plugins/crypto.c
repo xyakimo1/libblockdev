@@ -2279,7 +2279,7 @@ gboolean bd_crypto_luks_convert (const gchar *device, BDCryptoLUKSVersion target
 
     ret = crypt_convert (cd, target_type, NULL);
     if (ret != 0) {
-        g_set_error (error, BD_CRYPTO_ERROR, BD_CRYPTO_ERROR_DEVICE,
+        g_set_error (error, BD_CRYPTO_ERROR, BD_CRYPTO_ERROR_CONVERT_FAILED,
                      "Conversion failed: %s", strerror_l (-ret, c_locale));
         crypt_free (cd);
         return FALSE;
@@ -2423,8 +2423,18 @@ gboolean bd_crypto_luks_reencrypt(const gchar *device, BDCryptoLUKSReencryptPara
                                               params->cipher_mode,
                                               &paramsReencrypt);
     if (ret < 0) {
-        g_set_error(&l_error, BD_CRYPTO_ERROR, BD_CRYPTO_ERROR_ADD_KEY,
+        g_set_error(&l_error, BD_CRYPTO_ERROR, BD_CRYPTO_ERROR_REENCRYPT_FAILED,
                     "Failed to initialize reencryption: %s", strerror_l(-ret, c_locale));
+        bd_utils_report_finished(progress_id, l_error->message);
+        g_propagate_error(error, l_error);
+        crypt_free(cd);
+        return FALSE;
+    }
+
+    ret = crypt_reencrypt_run(cd, NULL, NULL);
+    if (ret != 0) {
+        g_set_error(&l_error, BD_CRYPTO_ERROR, BD_CRYPTO_ERROR_REENCRYPT_FAILED,
+                    "Reencryption failed: %s", strerror_l(-ret, c_locale));
         bd_utils_report_finished(progress_id, l_error->message);
         g_propagate_error(error, l_error);
         crypt_free(cd);

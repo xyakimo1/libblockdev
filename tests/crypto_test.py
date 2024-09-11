@@ -51,7 +51,7 @@ class CryptoTestCase(unittest.TestCase):
             BlockDev.init(cls.requested_plugins, None)
         else:
             BlockDev.reinit(cls.requested_plugins, True, None)
-        BlockDev.utils_init_logging(print)
+        #BlockDev.utils_init_logging(print)
 
 
     def setUp(self):
@@ -1208,9 +1208,10 @@ class CryptoTestConvert(CryptoTestCase):
 
 class CryptoTestReencrypt(CryptoTestCase):
     @tag_test(TestTags.SLOW, TestTags.CORE)
-    def test_simple_reencryption(self):
+    def test_online_reencryption(self):
         """ Verify that a simple reencryption case works """
         self._luks2_format(self.loop_dev, PASSWD)
+        # TODO note cipher
 
         ctx = BlockDev.CryptoKeyslotContext(passphrase=PASSWD)
         params = BlockDev.CryptoLUKSReencryptParams.new(
@@ -1227,6 +1228,9 @@ class CryptoTestReencrypt(CryptoTestCase):
         )
 
         BlockDev.crypto_luks_reencrypt(self.loop_dev, params, ctx)
+        # TODO check that cipher has changed
+
+    # TODO offline reencryption
 
 class CryptoTestLuksSectorSize(CryptoTestCase):
     def setUp(self):
