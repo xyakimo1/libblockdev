@@ -2409,7 +2409,7 @@ gboolean bd_crypto_luks_reencrypt(const gchar *device, BDCryptoLUKSReencryptPara
     paramsReencrypt.device_size = 0;
     paramsReencrypt.luks2 = &paramsLuks2;
 
-    paramsLuks2.sector_size = 512;
+    paramsLuks2.sector_size = params->sector_size;
     paramsLuks2.pbkdf = get_pbkdf_params (params->pbkdf, error);
 
     // Initialize reencryption

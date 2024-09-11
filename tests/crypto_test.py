@@ -1214,17 +1214,10 @@ class CryptoTestReencrypt(CryptoTestCase):
         # TODO note cipher
 
         ctx = BlockDev.CryptoKeyslotContext(passphrase=PASSWD)
-        params = BlockDev.CryptoLUKSReencryptParams.new(
+        params = BlockDev.CryptoLUKSReencryptParams(
             key_size=256,
             cipher="aes",
-            cipher_mode="cbc-essiv:sha256",
-            resilience="checksum",
-            hash="sha256",
-            max_hotzone_size=0,
-            sector_size=512,
-            new_volume_key=True,
-            offline=False,
-            pbkdf=BlockDev.CryptoLUKSPBKDF()
+            cipher_mode="cbc-essiv:sha256"
         )
 
         BlockDev.crypto_luks_reencrypt(self.loop_dev, params, ctx)
