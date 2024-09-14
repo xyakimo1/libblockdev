@@ -1211,17 +1211,21 @@ class CryptoTestReencrypt(CryptoTestCase):
     def test_online_reencryption(self):
         """ Verify that a simple reencryption case works """
         self._luks2_format(self.loop_dev, PASSWD)
-        # TODO note cipher
+        mode_before = BlockDev.crypto_luks_info(self.loop_dev).mode
+        REQUESTED_MODE = "cbc-essiv:sha256"
 
         ctx = BlockDev.CryptoKeyslotContext(passphrase=PASSWD)
         params = BlockDev.CryptoLUKSReencryptParams(
             key_size=256,
             cipher="aes",
-            cipher_mode="cbc-essiv:sha256"
+            cipher_mode=REQUESTED_MODE
         )
 
         BlockDev.crypto_luks_reencrypt(self.loop_dev, params, ctx)
-        # TODO check that cipher has changed
+        mode_after = BlockDev.crypto_luks_info(self.loop_dev).mode
+
+        self.assertEqual(mode_after, REQUESTED_MODE)
+        self.assertNotEqual(mode_before, mode_after)
 
     # TODO offline reencryption
 
