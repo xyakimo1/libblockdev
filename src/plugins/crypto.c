@@ -2381,19 +2381,19 @@ gboolean bd_crypto_luks_reencrypt(const gchar *device, BDCryptoLUKSReencryptPara
     }
 
     key_size = params->key_size / 8; // convert bits to bytes
-    ret = crypt_keyslot_add_by_key(cd,
-                                   CRYPT_ANY_SLOT,
-                                   NULL, // Let libcryptsetup generate new volume key for us (CRYPT_VOLUME_KEY_NO_SEGMENT flag).
-                                   key_size,
-                                   (const char*) context->u.passphrase.pass_data,
-                                   context->u.passphrase.data_len,
-                                   KEYSLOT_FLAGS);
+    ret = crypt_keyslot_add_by_key (cd,
+                                    CRYPT_ANY_SLOT,
+                                    NULL, // Let libcryptsetup generate new volume key for us (CRYPT_VOLUME_KEY_NO_SEGMENT flag).
+                                    key_size,
+                                    (const char*) context->u.passphrase.pass_data,
+                                    context->u.passphrase.data_len,
+                                    KEYSLOT_FLAGS);
     if (ret < 0) {
-        g_set_error(&l_error, BD_CRYPTO_ERROR, BD_CRYPTO_ERROR_ADD_KEY,
-                    "Failed to add key: %s", strerror_l(-ret, c_locale));
-        bd_utils_report_finished(progress_id, l_error->message);
-        g_propagate_error(error, l_error);
-        crypt_free(cd);
+        g_set_error (&l_error, BD_CRYPTO_ERROR, BD_CRYPTO_ERROR_ADD_KEY,
+                     "Failed to add key: %s", strerror_l(-ret, c_locale));
+        bd_utils_report_finished (progress_id, l_error->message);
+        g_propagate_error (error, l_error);
+        crypt_free (cd);
         return FALSE;
     }
     allocated_keyslot = ret;
@@ -2421,25 +2421,25 @@ gboolean bd_crypto_luks_reencrypt(const gchar *device, BDCryptoLUKSReencryptPara
                                               params->cipher_mode,
                                               &paramsReencrypt);
     if (ret < 0) {
-        g_set_error(&l_error, BD_CRYPTO_ERROR, BD_CRYPTO_ERROR_REENCRYPT_FAILED,
-                    "Failed to initialize reencryption: %s", strerror_l(-ret, c_locale));
-        bd_utils_report_finished(progress_id, l_error->message);
-        g_propagate_error(error, l_error);
-        crypt_free(cd);
+        g_set_error (&l_error, BD_CRYPTO_ERROR, BD_CRYPTO_ERROR_REENCRYPT_FAILED,
+                     "Failed to initialize reencryption: %s", strerror_l(-ret, c_locale));
+        bd_utils_report_finished (progress_id, l_error->message);
+        g_propagate_error (error, l_error);
+        crypt_free (cd);
         return FALSE;
     }
 
-    ret = crypt_reencrypt_run(cd, NULL, NULL);
+    ret = crypt_reencrypt_run (cd, NULL, NULL);
     if (ret != 0) {
-        g_set_error(&l_error, BD_CRYPTO_ERROR, BD_CRYPTO_ERROR_REENCRYPT_FAILED,
-                    "Reencryption failed: %s", strerror_l(-ret, c_locale));
-        bd_utils_report_finished(progress_id, l_error->message);
-        g_propagate_error(error, l_error);
-        crypt_free(cd);
+        g_set_error (&l_error, BD_CRYPTO_ERROR, BD_CRYPTO_ERROR_REENCRYPT_FAILED,
+                     "Reencryption failed: %s", strerror_l(-ret, c_locale));
+        bd_utils_report_finished (progress_id, l_error->message);
+        g_propagate_error (error, l_error);
+        crypt_free (cd);
         return FALSE;
     }
 
-    bd_utils_report_finished(progress_id, "Completed.");
+    bd_utils_report_finished (progress_id, "Completed.");
     return TRUE;
 }
 
