@@ -1207,27 +1207,34 @@ class CryptoTestConvert(CryptoTestCase):
 
 
 class CryptoTestReencrypt(CryptoTestCase):
-    @tag_test(TestTags.SLOW, TestTags.CORE)
-    def test_online_reencryption(self):
-        """ Verify that a simple reencryption case works """
+    def _luks_reencrypt(self, offline, requested_mode="cbc-essiv:sha256"):
         self._luks2_format(self.loop_dev, PASSWD)
         mode_before = BlockDev.crypto_luks_info(self.loop_dev).mode
-        REQUESTED_MODE = "cbc-essiv:sha256"
 
         ctx = BlockDev.CryptoKeyslotContext(passphrase=PASSWD)
         params = BlockDev.CryptoLUKSReencryptParams(
             key_size=256,
             cipher="aes",
-            cipher_mode=REQUESTED_MODE
+            cipher_mode=requested_mode,
+            offline=offline
         )
 
         BlockDev.crypto_luks_reencrypt(self.loop_dev, params, ctx)
         mode_after = BlockDev.crypto_luks_info(self.loop_dev).mode
 
-        self.assertEqual(mode_after, REQUESTED_MODE)
+        self.assertEqual(mode_after, requested_mode)
         self.assertNotEqual(mode_before, mode_after)
 
-    # TODO offline reencryption
+    @tag_test(TestTags.SLOW, TestTags.CORE)
+    def test_offline_reencryption(self):
+        """ Verify that offline reencryption works """
+        self._luks_reencrypt(offline=True)
+
+    @tag_test(TestTags.SLOW, TestTags.CORE)
+    def test_online_reencryption(self):
+        """ Verify that online reencryption works """
+        self._luks_reencrypt(offline=False)
+
 
 class CryptoTestLuksSectorSize(CryptoTestCase):
     def setUp(self):

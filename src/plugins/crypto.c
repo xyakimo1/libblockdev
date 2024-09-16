@@ -2335,8 +2335,6 @@ BDCryptoLUKSReencryptParams* bd_crypto_luks_reencrypt_params_new (guint32 key_si
     return ret;
 }
 
-
-
 gboolean bd_crypto_luks_reencrypt(const gchar *device, BDCryptoLUKSReencryptParams *params, BDCryptoKeyslotContext *context, GError **error) {
     const uint32_t KEYSLOT_FLAGS = CRYPT_VOLUME_KEY_NO_SEGMENT;
     struct crypt_device *cd = NULL;
