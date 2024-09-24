@@ -2412,7 +2412,7 @@ gboolean bd_crypto_luks_reencrypt(const gchar *device, BDCryptoLUKSReencryptPara
 
     paramsReencrypt.mode = CRYPT_REENCRYPT_REENCRYPT;
     paramsReencrypt.direction = CRYPT_REENCRYPT_FORWARD;
-    paramsReencrypt.resilience = params->resilience; // duplicate string?
+    paramsReencrypt.resilience = params->resilience;
     paramsReencrypt.hash = params->hash;
     paramsReencrypt.data_shift = 0;
     paramsReencrypt.max_hotzone_size = params->max_hotzone_size;
@@ -2451,6 +2451,7 @@ gboolean bd_crypto_luks_reencrypt(const gchar *device, BDCryptoLUKSReencryptPara
         return FALSE;
     }
 
+    crypt_free (cd);
     bd_utils_report_finished (progress_id, "Completed.");
     return TRUE;
 }
