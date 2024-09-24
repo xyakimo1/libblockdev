@@ -1206,7 +1206,12 @@ class CryptoTestConvert(CryptoTestCase):
         self.assertEqual(info.version, BlockDev.CryptoLUKSVersion.LUKS2)
 
 
+def _print_progress(size: int, offset: int) -> int:
+    print(f"Size: {size}, offset: {offset}. Percentage: {offset / size}")
+    return 0
+
 class CryptoTestReencrypt(CryptoTestCase):
+
     def _luks_reencrypt(self, device, ctx, offline, requested_mode="cbc-essiv:sha256"):
         mode_before = BlockDev.crypto_luks_info(device).mode
 
@@ -1217,7 +1222,7 @@ class CryptoTestReencrypt(CryptoTestCase):
             offline=offline
         )
 
-        BlockDev.crypto_luks_reencrypt(device, params, ctx)
+        BlockDev.crypto_luks_reencrypt(device, params, ctx, _print_progress)
         mode_after = BlockDev.crypto_luks_info(device).mode
 
         self.assertEqual(mode_after, requested_mode)

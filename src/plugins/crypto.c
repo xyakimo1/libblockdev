@@ -2335,7 +2335,14 @@ BDCryptoLUKSReencryptParams* bd_crypto_luks_reencrypt_params_new (guint32 key_si
     return ret;
 }
 
-gboolean bd_crypto_luks_reencrypt(const gchar *device, BDCryptoLUKSReencryptParams *params, BDCryptoKeyslotContext *context, GError **error) {
+static int reencryption_progress (uint64_t size, uint64_t offset, void *usrptr) {
+    if (usrptr == NULL)
+        return 0;
+
+    return ((BDCryptoLUKSReencryptProgFunc) usrptr) (size, offset);
+}
+
+gboolean bd_crypto_luks_reencrypt(const gchar *device, BDCryptoLUKSReencryptParams *params, BDCryptoKeyslotContext *context, BDCryptoLUKSReencryptProgFunc prog_func, GError **error) {
     const uint32_t KEYSLOT_FLAGS = CRYPT_VOLUME_KEY_NO_SEGMENT;
     struct crypt_device *cd = NULL;
     struct crypt_params_reencrypt paramsReencrypt = {};
@@ -2441,7 +2448,7 @@ gboolean bd_crypto_luks_reencrypt(const gchar *device, BDCryptoLUKSReencryptPara
         return FALSE;
     }
 
-    ret = crypt_reencrypt_run (cd, NULL, NULL);
+    ret = crypt_reencrypt_run (cd, reencryption_progress, prog_func);
     if (ret != 0) {
         g_set_error (&l_error, BD_CRYPTO_ERROR, BD_CRYPTO_ERROR_REENCRYPT_FAILED,
                      "Reencryption failed: %s", strerror_l(-ret, c_locale));

@@ -1224,15 +1224,23 @@ GType bd_crypto_luks_reencrypt_params_get_type () {
 }
 
 /**
- * TODO
- *
- * @param device
- * @param params
- * @param context
- * @param error
- * @return
+ * BDCryptoLUKSReencryptProgFunc:
+ * @param size
+ * @param offset
  */
-gboolean bd_crypto_luks_reencrypt(const gchar *device, BDCryptoLUKSReencryptParams *params, BDCryptoKeyslotContext *context, GError **error);
+typedef int (*BDCryptoLUKSReencryptProgFunc) (guint64 size, guint64 offset);
+
+// TODO
+/**
+ * bd_crypto_luks_reencrypt:
+ * @device:
+ * @params:
+ * @context:
+ * @progFunc: (scope call) (nullable): fgvdvff
+ * @error:
+ *
+ */
+gboolean bd_crypto_luks_reencrypt(const gchar *device, BDCryptoLUKSReencryptParams *params, BDCryptoKeyslotContext *context, BDCryptoLUKSReencryptProgFunc progFunc, GError **error);
 
 
 /**
