@@ -2342,7 +2342,7 @@ static int reencryption_progress (uint64_t size, uint64_t offset, void *usrptr) 
     return ((BDCryptoLUKSReencryptProgFunc) usrptr) (size, offset);
 }
 
-gboolean bd_crypto_luks_reencrypt(const gchar *device, BDCryptoLUKSReencryptParams *params, BDCryptoKeyslotContext *context, BDCryptoLUKSReencryptProgFunc prog_func, GError **error) {
+gboolean bd_crypto_luks_reencrypt (const gchar *device, BDCryptoLUKSReencryptParams *params, BDCryptoKeyslotContext *context, BDCryptoLUKSReencryptProgFunc prog_func, GError **error) {
     const uint32_t KEYSLOT_FLAGS = CRYPT_VOLUME_KEY_NO_SEGMENT;
     struct crypt_device *cd = NULL;
     struct crypt_params_reencrypt paramsReencrypt = {};
@@ -2360,32 +2360,32 @@ gboolean bd_crypto_luks_reencrypt(const gchar *device, BDCryptoLUKSReencryptPara
     g_free (msg);
 
     if (params->offline) { // offline reencryption, `device` is a block device
-        ret = crypt_init(&cd, device);
+        ret = crypt_init (&cd, device);
         if (ret != 0) {
-            g_set_error(&l_error, BD_CRYPTO_ERROR, BD_CRYPTO_ERROR_DEVICE,
-                        "Failed to initialize an offline device: %s", strerror_l(-ret, c_locale));
-            bd_utils_report_finished(progress_id, l_error->message);
-            g_propagate_error(error, l_error);
+            g_set_error (&l_error, BD_CRYPTO_ERROR, BD_CRYPTO_ERROR_DEVICE,
+                         "Failed to initialize an offline device: %s", strerror_l(-ret, c_locale));
+            bd_utils_report_finished (progress_id, l_error->message);
+            g_propagate_error (error, l_error);
             return FALSE;
         }
 
-        ret = crypt_load(cd, CRYPT_LUKS, NULL);
+        ret = crypt_load (cd, CRYPT_LUKS, NULL);
         if (ret != 0) {
-            g_set_error(&l_error, BD_CRYPTO_ERROR, BD_CRYPTO_ERROR_DEVICE,
-                        "Failed to load an offline device: %s", strerror_l(-ret, c_locale));
-            crypt_free(cd);
-            bd_utils_report_finished(progress_id, l_error->message);
-            g_propagate_error(error, l_error);
+            g_set_error (&l_error, BD_CRYPTO_ERROR, BD_CRYPTO_ERROR_DEVICE,
+                         "Failed to load an offline device: %s", strerror_l(-ret, c_locale));
+            crypt_free (cd);
+            bd_utils_report_finished (progress_id, l_error->message);
+            g_propagate_error (error, l_error);
             return FALSE;
         }
 
     } else { // online reencryption, `device` is an unlocked LUKS device
-        ret = crypt_init_by_name(&cd, device);
+        ret = crypt_init_by_name (&cd, device);
         if (ret != 0) {
-            g_set_error(&l_error, BD_CRYPTO_ERROR, BD_CRYPTO_ERROR_DEVICE,
-                        "Failed to initialize an online device: %s", strerror_l(-ret, c_locale));
-            bd_utils_report_finished(progress_id, l_error->message);
-            g_propagate_error(error, l_error);
+            g_set_error (&l_error, BD_CRYPTO_ERROR, BD_CRYPTO_ERROR_DEVICE,
+                         "Failed to initialize an online device: %s", strerror_l(-ret, c_locale));
+            bd_utils_report_finished (progress_id, l_error->message);
+            g_propagate_error (error, l_error);
             return FALSE;
         }
     }
