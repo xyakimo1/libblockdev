@@ -1207,11 +1207,9 @@ class CryptoTestConvert(CryptoTestCase):
 
 
 class CryptoTestReencrypt(CryptoTestCase):
-    def _luks_reencrypt(self, offline, requested_mode="cbc-essiv:sha256"):
-        self._luks2_format(self.loop_dev, PASSWD)
-        mode_before = BlockDev.crypto_luks_info(self.loop_dev).mode
+    def _luks_reencrypt(self, device, ctx, offline, requested_mode="cbc-essiv:sha256"):
+        mode_before = BlockDev.crypto_luks_info(device).mode
 
-        ctx = BlockDev.CryptoKeyslotContext(passphrase=PASSWD)
         params = BlockDev.CryptoLUKSReencryptParams(
             key_size=256,
             cipher="aes",
@@ -1219,8 +1217,8 @@ class CryptoTestReencrypt(CryptoTestCase):
             offline=offline
         )
 
-        BlockDev.crypto_luks_reencrypt(self.loop_dev, params, ctx)
-        mode_after = BlockDev.crypto_luks_info(self.loop_dev).mode
+        BlockDev.crypto_luks_reencrypt(device, params, ctx)
+        mode_after = BlockDev.crypto_luks_info(device).mode
 
         self.assertEqual(mode_after, requested_mode)
         self.assertNotEqual(mode_before, mode_after)
@@ -1228,12 +1226,21 @@ class CryptoTestReencrypt(CryptoTestCase):
     @tag_test(TestTags.SLOW, TestTags.CORE)
     def test_offline_reencryption(self):
         """ Verify that offline reencryption works """
-        self._luks_reencrypt(offline=True)
+        self._luks2_format(self.loop_dev, PASSWD)
+        ctx = BlockDev.CryptoKeyslotContext(passphrase=PASSWD)
+
+        self._luks_reencrypt(device=self.loop_dev, ctx=ctx, offline=True)
 
     @tag_test(TestTags.SLOW, TestTags.CORE)
     def test_online_reencryption(self):
         """ Verify that online reencryption works """
-        self._luks_reencrypt(offline=False)
+        self._luks2_format(self.loop_dev, PASSWD)
+        ctx = BlockDev.CryptoKeyslotContext(passphrase=PASSWD)
+
+        succ = BlockDev.crypto_luks_open(self.loop_dev, "libblockdevTestLUKS", ctx, False)
+        self.assertTrue(succ)
+
+        self._luks_reencrypt(device="libblockdevTestLUKS", ctx=ctx, offline=False)
 
 
 class CryptoTestLuksSectorSize(CryptoTestCase):
