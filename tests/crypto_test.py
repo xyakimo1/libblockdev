@@ -1206,13 +1206,9 @@ class CryptoTestConvert(CryptoTestCase):
         self.assertEqual(info.version, BlockDev.CryptoLUKSVersion.LUKS2)
 
 
-def _print_progress(size: int, offset: int) -> int:
-    print(f"Size: {size}, offset: {offset}. Percentage: {offset / size}")
-    return 0
-
 class CryptoTestReencrypt(CryptoTestCase):
 
-    def _luks_reencrypt(self, device, ctx, offline, requested_mode="cbc-essiv:sha256"):
+    def _luks_reencrypt(self, device, ctx, offline, prog_func=None, requested_mode="cbc-essiv:sha256"):
         mode_before = BlockDev.crypto_luks_info(device).mode
 
         params = BlockDev.CryptoLUKSReencryptParams(
@@ -1222,7 +1218,7 @@ class CryptoTestReencrypt(CryptoTestCase):
             offline=offline
         )
 
-        BlockDev.crypto_luks_reencrypt(device, params, ctx, _print_progress)
+        BlockDev.crypto_luks_reencrypt(device, params, ctx, prog_func)
         mode_after = BlockDev.crypto_luks_info(device).mode
 
         self.assertEqual(mode_after, requested_mode)
@@ -1246,6 +1242,36 @@ class CryptoTestReencrypt(CryptoTestCase):
         self.assertTrue(succ)
 
         self._luks_reencrypt(device="libblockdevTestLUKS", ctx=ctx, offline=False)
+
+    first_reported_size = 0
+    last_offset = 0
+
+    def _progress_callback(self, size: int, offset: int) -> int:
+        if self.first_reported_size == 0:
+            self.first_reported_size = size
+
+        self.assertEqual(self.first_reported_size, size) # assert that size of the device hasn't change
+        self.assertTrue(offset >= self.last_offset) # the direction of reencryption is hardcoded to FORWARD,
+                                                    #   so the offset number shouldn't be less than the previously reported
+        self.assertTrue(offset <= size)
+        self.last_offset = offset
+        return 0
+
+    @tag_test(TestTags.SLOW, TestTags.CORE)
+    def test_progress_reporting(self):
+        """ Verify that progress reporting works """
+        self._luks2_format(self.loop_dev, PASSWD)
+        ctx = BlockDev.CryptoKeyslotContext(passphrase=PASSWD)
+
+        succ = BlockDev.crypto_luks_open(self.loop_dev, "libblockdevTestLUKS", ctx, False)
+        self.assertTrue(succ)
+
+        self.first_reported_size = 0
+        self.last_offset = 0
+        self._luks_reencrypt(device="libblockdevTestLUKS", ctx=ctx, offline=False, prog_func=self._progress_callback)
+
+        self.assertNotEqual(self.first_reported_size, 0)
+        self.assertNotEqual(self.last_offset, 0)
 
 
 class CryptoTestLuksSectorSize(CryptoTestCase):

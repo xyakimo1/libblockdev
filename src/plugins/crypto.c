@@ -2341,7 +2341,7 @@ struct reencryption_progress_struct {
 };
 
 static int reencryption_progress (uint64_t size, uint64_t offset, void *usrptr) {
-    if (usrptr == NULL)
+    if (usrptr == NULL) // then wrong usage on the dev side. we should report progress, so we need progress_id
         return 0;
 
     // unmarshal usrptr
@@ -2352,6 +2352,8 @@ static int reencryption_progress (uint64_t size, uint64_t offset, void *usrptr) 
     gdouble progress = 10 + (((gdouble) offset / size) * 100) * 0.9;
     bd_utils_report_progress (progress_id, progress, "Reencryption in progress");
 
+    if (usr_func == NULL)
+        return 0;
     return usr_func (size, offset);
 }
 
