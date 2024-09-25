@@ -2335,11 +2335,24 @@ BDCryptoLUKSReencryptParams* bd_crypto_luks_reencrypt_params_new (guint32 key_si
     return ret;
 }
 
+struct reencryption_progress_struct {
+    guint64 progress_id;
+    BDCryptoLUKSReencryptProgFunc usr_func;
+};
+
 static int reencryption_progress (uint64_t size, uint64_t offset, void *usrptr) {
     if (usrptr == NULL)
         return 0;
 
-    return ((BDCryptoLUKSReencryptProgFunc) usrptr) (size, offset);
+    // unmarshal usrptr
+    guint64 progress_id = ((struct reencryption_progress_struct *) usrptr)->progress_id;
+    BDCryptoLUKSReencryptProgFunc usr_func = ((struct reencryption_progress_struct *) usrptr)->usr_func;
+
+    /* "convert" the progress from 0-100 to 10-100 because reencryption starts at 10 in bd_crypto_luks_reencrypt */
+    gdouble progress = 10 + (((gdouble) offset / size) * 100) * 0.9;
+    bd_utils_report_progress (progress_id, progress, "Reencryption in progress");
+
+    return usr_func (size, offset);
 }
 
 gboolean bd_crypto_luks_reencrypt (const gchar *device, BDCryptoLUKSReencryptParams *params, BDCryptoKeyslotContext *context, BDCryptoLUKSReencryptProgFunc prog_func, GError **error) {
@@ -2416,6 +2429,7 @@ gboolean bd_crypto_luks_reencrypt (const gchar *device, BDCryptoLUKSReencryptPar
         return FALSE;
     }
     allocated_keyslot = ret;
+    bd_utils_report_progress (progress_id, 10, "Added new keyslot");
 
     paramsReencrypt.mode = CRYPT_REENCRYPT_REENCRYPT;
     paramsReencrypt.direction = CRYPT_REENCRYPT_FORWARD;
@@ -2448,7 +2462,13 @@ gboolean bd_crypto_luks_reencrypt (const gchar *device, BDCryptoLUKSReencryptPar
         return FALSE;
     }
 
-    ret = crypt_reencrypt_run (cd, reencryption_progress, prog_func);
+    // marshal to usrptr
+    struct reencryption_progress_struct usrptr = {
+            .progress_id = progress_id,
+            .usr_func = prog_func
+    };
+
+    ret = crypt_reencrypt_run (cd, reencryption_progress, &usrptr);
     if (ret != 0) {
         g_set_error (&l_error, BD_CRYPTO_ERROR, BD_CRYPTO_ERROR_REENCRYPT_FAILED,
                      "Reencryption failed: %s", strerror_l(-ret, c_locale));
