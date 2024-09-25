@@ -94,15 +94,15 @@ class CryptoTestCase(unittest.TestCase):
 
         os.unlink(self.keyfile)
 
-    def _luks_format(self, device, passphrase, keyfile=None, luks_version=BlockDev.CryptoLUKSVersion.LUKS1):
+    def _luks_format(self, device, passphrase, keyfile=None, luks_version=BlockDev.CryptoLUKSVersion.LUKS1, cipher=None, key_size=0):
         ctx = BlockDev.CryptoKeyslotContext(passphrase=passphrase)
-        BlockDev.crypto_luks_format(device, context=ctx, luks_version=luks_version)
+        BlockDev.crypto_luks_format(device, context=ctx, luks_version=luks_version, cipher=cipher, key_size=key_size)
         if keyfile:
             nctx = BlockDev.CryptoKeyslotContext(keyfile=keyfile)
             BlockDev.crypto_luks_add_key(device, ctx, nctx)
 
-    def _luks2_format(self, device, passphrase, keyfile=None):
-        return self._luks_format(device, passphrase, keyfile, BlockDev.CryptoLUKSVersion.LUKS2)
+    def _luks2_format(self, device, passphrase, keyfile=None, cipher=None, key_size=0):
+        return self._luks_format(device, passphrase, keyfile, BlockDev.CryptoLUKSVersion.LUKS2, cipher, key_size)
 
 class CryptoNoDevTestCase(CryptoTestCase):
     def setUp(self):
@@ -1208,14 +1208,15 @@ class CryptoTestConvert(CryptoTestCase):
 
 class CryptoTestReencrypt(CryptoTestCase):
 
-    def _luks_reencrypt(self, device, ctx, offline, prog_func=None, requested_mode="cbc-essiv:sha256"):
+    def _luks_reencrypt(self, device, ctx, offline, new_volume_key=True, prog_func=None, requested_mode="cbc-essiv:sha256"):
         mode_before = BlockDev.crypto_luks_info(device).mode
 
         params = BlockDev.CryptoLUKSReencryptParams(
             key_size=256,
             cipher="aes",
             cipher_mode=requested_mode,
-            offline=offline
+            offline=offline,
+            new_volume_key=new_volume_key
         )
 
         BlockDev.crypto_luks_reencrypt(device, params, ctx, prog_func)
@@ -1259,7 +1260,7 @@ class CryptoTestReencrypt(CryptoTestCase):
 
     @tag_test(TestTags.SLOW, TestTags.CORE)
     def test_progress_reporting(self):
-        """ Verify that progress reporting works """
+        """ Verify that progress reporting works in reencryption """
         self._luks2_format(self.loop_dev, PASSWD)
         ctx = BlockDev.CryptoKeyslotContext(passphrase=PASSWD)
 
@@ -1273,6 +1274,45 @@ class CryptoTestReencrypt(CryptoTestCase):
         self.assertNotEqual(self.first_reported_size, 0)
         self.assertNotEqual(self.last_offset, 0)
 
+    def _get_volume_key(self) -> bytes:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            volume_key_file_path = os.path.join(temp_dir, "libblockdev_crypto_reencryption_volume.key")
+
+            ret, out, err = run_command("echo '%s' | cryptsetup luksDump --dump-volume-key --volume-key-file %s %s"
+                                        % (PASSWD, volume_key_file_path, self.loop_dev))
+            if ret != 0:
+                self.fail("Failed to get volume key from %s:\n%s %s" % (self.loop_dev, out, err))
+
+            with open(volume_key_file_path, 'rb') as file:
+                volume_key = file.read()
+
+        return volume_key
+
+    @tag_test(TestTags.SLOW, TestTags.CORE)
+    def test_volume_key_change(self):
+        """ Verify that a new volume key is generated in reencryption """
+        self._luks2_format(self.loop_dev, PASSWD)
+        ctx = BlockDev.CryptoKeyslotContext(passphrase=PASSWD)
+
+        volume_key_before = self._get_volume_key()
+        self._luks_reencrypt(device=self.loop_dev, ctx=ctx, offline=True)
+        volume_key_after = self._get_volume_key()
+
+        self.assertNotEqual(volume_key_before, volume_key_after)
+
+    @tag_test(TestTags.SLOW, TestTags.CORE)
+    def test_no_volume_key_change(self):
+        """ Verify that an existing volume key can be used in reencryption """
+        self._luks2_format(self.loop_dev, PASSWD, key_size=256) # the default key size for AES-XTS is 512 b.
+                                                                # CBC with such key size is not supported,
+                                                                # so reencryption with the same volume key would fail.
+        ctx = BlockDev.CryptoKeyslotContext(passphrase=PASSWD)
+
+        volume_key_before = self._get_volume_key()
+        self._luks_reencrypt(device=self.loop_dev, ctx=ctx, offline=True, new_volume_key=False)
+        volume_key_after = self._get_volume_key()
+
+        self.assertEqual(volume_key_before, volume_key_after)
 
 class CryptoTestLuksSectorSize(CryptoTestCase):
     def setUp(self):

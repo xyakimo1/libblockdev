@@ -298,7 +298,7 @@ gboolean bd_crypto_luks_convert (const gchar *device, BDCryptoLUKSVersion target
 // TODO
 /**
  * BDCryptoLUKSReencryptParams:
- * @key_size    New volume key size if @new_volume_key is true.
+ * @key_size    New volume key size if @new_volume_key is true, ignored otherwise.
  * @cipher      New cipher.
  * @cipher_mode     New cipher mode.
  * @resilience      Resilience.

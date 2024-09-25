@@ -2358,12 +2358,13 @@ static int reencryption_progress (uint64_t size, uint64_t offset, void *usrptr) 
 }
 
 gboolean bd_crypto_luks_reencrypt (const gchar *device, BDCryptoLUKSReencryptParams *params, BDCryptoKeyslotContext *context, BDCryptoLUKSReencryptProgFunc prog_func, GError **error) {
-    const uint32_t KEYSLOT_FLAGS = CRYPT_VOLUME_KEY_NO_SEGMENT;
     struct crypt_device *cd = NULL;
     struct crypt_params_reencrypt paramsReencrypt = {};
     struct crypt_params_luks2 paramsLuks2 = {};
 
-    guint key_size;
+    guint key_size = params->key_size / 8; // convert bits to bytes
+    char *volume_key = NULL;
+    uint32_t keyslot_flags = params->new_volume_key ? CRYPT_VOLUME_KEY_NO_SEGMENT : 0;
     int allocated_keyslot;
     gint ret = 0;
     guint64 progress_id = 0;
@@ -2414,14 +2415,31 @@ gboolean bd_crypto_luks_reencrypt (const gchar *device, BDCryptoLUKSReencryptPar
         return FALSE;
     }
 
-    key_size = params->key_size / 8; // convert bits to bytes
+    if (!params->new_volume_key) {
+        // Get an existing volume key
+        size_t volume_key_size = 1024; // buffer size before crypt_volume_key_get()
+        volume_key = g_new0 (char, volume_key_size);
+        ret = crypt_volume_key_get (cd, CRYPT_ANY_SLOT, volume_key, &volume_key_size, (const char*) context->u.passphrase.pass_data, context->u.passphrase.data_len);
+        if (ret < 0) {
+            g_set_error (&l_error, BD_CRYPTO_ERROR, BD_CRYPTO_ERROR_NO_KEY,
+                         "Failed to get volume key: %s", strerror_l(-ret, c_locale));
+            bd_utils_report_finished (progress_id, l_error->message);
+            g_propagate_error (error, l_error);
+            g_free (volume_key);
+            crypt_free (cd);
+            return FALSE;
+        }
+        key_size = volume_key_size;
+    }
+
     ret = crypt_keyslot_add_by_key (cd,
                                     CRYPT_ANY_SLOT,
-                                    NULL, // Let libcryptsetup generate new volume key for us (the CRYPT_VOLUME_KEY_NO_SEGMENT flag).
+                                    volume_key,
                                     key_size,
                                     (const char*) context->u.passphrase.pass_data,
                                     context->u.passphrase.data_len,
-                                    KEYSLOT_FLAGS);
+                                    keyslot_flags);
+    g_free (volume_key);
     if (ret < 0) {
         g_set_error (&l_error, BD_CRYPTO_ERROR, BD_CRYPTO_ERROR_ADD_KEY,
                      "Failed to add key: %s", strerror_l(-ret, c_locale));
