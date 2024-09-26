@@ -1314,6 +1314,14 @@ class CryptoTestReencrypt(CryptoTestCase):
 
         self.assertEqual(volume_key_before, volume_key_after)
 
+    @tag_test(TestTags.SLOW, TestTags.CORE)
+    def test_status(self):
+        """ Verify that reencryption status reporting works """
+        self._luks2_format(self.loop_dev, PASSWD)
+
+        status, mode = BlockDev.crypto_luks_reencrypt_status(self.loop_dev)
+        self.assertEqual(status, BlockDev.CryptoLUKSReencryptStatus.NONE)
+
 class CryptoTestLuksSectorSize(CryptoTestCase):
     def setUp(self):
         if not check_cryptsetup_version("2.4.0"):

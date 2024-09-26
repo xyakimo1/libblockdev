@@ -2503,6 +2503,75 @@ gboolean bd_crypto_luks_reencrypt (const gchar *device, BDCryptoLUKSReencryptPar
     return TRUE;
 }
 
+BDCryptoLUKSReencryptStatus bd_crypto_luks_reencrypt_status (const gchar *device, BDCryptoLUKSReencryptMode *mode, GError **error) {
+    struct crypt_device *cd = NULL;
+    struct crypt_params_luks2 paramsLuks2 = {};
+    struct crypt_params_reencrypt paramsReencrypt = {.luks2=&paramsLuks2};
+
+    gint ret = 0;
+
+    ret = crypt_init (&cd, device);
+    if (ret != 0) {
+        g_set_error (error, BD_CRYPTO_ERROR, BD_CRYPTO_ERROR_DEVICE,
+                     "Failed to initialize device: %s", strerror_l (-ret, c_locale));
+        return FALSE;
+    }
+
+    ret = crypt_load (cd, CRYPT_LUKS, NULL);
+    if (ret != 0) {
+        g_set_error (error, BD_CRYPTO_ERROR, BD_CRYPTO_ERROR_DEVICE,
+                     "Failed to load device: %s", strerror_l (-ret, c_locale));
+        crypt_free (cd);
+        return FALSE;
+    }
+
+    ret = crypt_reencrypt_status (cd, &paramsReencrypt);
+    BDCryptoLUKSReencryptStatus to_return;
+    switch (ret) {
+        case CRYPT_REENCRYPT_NONE:
+            to_return = BD_CRYPTO_LUKS_REENCRYPT_NONE;
+            break;
+        case CRYPT_REENCRYPT_CLEAN:
+            to_return = BD_CRYPTO_LUKS_REENCRYPT_CLEAN;
+            break;
+        case CRYPT_REENCRYPT_CRASH:
+            to_return = BD_CRYPTO_LUKS_REENCRYPT_CRASH;
+            break;
+        case CRYPT_REENCRYPT_INVALID:
+            to_return = BD_CRYPTO_LUKS_REENCRYPT_INVALID;
+            break;
+        default:
+            g_set_error (error, BD_CRYPTO_ERROR, BD_CRYPTO_ERROR_DEVICE,
+                         "Failed to determine reencryption status. Unknown value: %d", ret);
+            crypt_free(cd);
+            return FALSE;
+    }
+
+    switch (paramsReencrypt.mode) {
+        case CRYPT_REENCRYPT_REENCRYPT:
+            *mode = BD_CRYPTO_LUKS_REENCRYPT;
+            break;
+        case CRYPT_REENCRYPT_ENCRYPT:
+            *mode = BD_CRYPTO_LUKS_ENCRYPT;
+            break;
+        case CRYPT_REENCRYPT_DECRYPT:
+            *mode = BD_CRYPTO_LUKS_DECRYPT;
+            break;
+        default:
+            g_set_error (error, BD_CRYPTO_ERROR, BD_CRYPTO_ERROR_DEVICE,
+                         "Failed to determine reencryption mode. Unknown value: %d", paramsReencrypt.mode);
+            crypt_free(cd);
+            return FALSE;
+    }
+
+    crypt_free(cd);
+    return to_return;
+}
+
+//gboolean bd_crypto_luks_reencrypt_resume (const gchar *device, BDCryptoLUKSReencryptParams *params, BDCryptoKeyslotContext *context, BDCryptoLUKSReencryptProgFunc prog_func, GError **error) {
+    // TODO
+//}
+
 static gint synced_close (gint fd) {
     gint ret = 0;
     ret = fsync (fd);

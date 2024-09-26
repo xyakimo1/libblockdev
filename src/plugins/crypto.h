@@ -333,7 +333,22 @@ BDCryptoLUKSReencryptParams* bd_crypto_luks_reencrypt_params_new(guint32 key_siz
  */
 typedef int (*BDCryptoLUKSReencryptProgFunc) (guint64 size, guint64 offset);
 
+typedef enum {
+    BD_CRYPTO_LUKS_REENCRYPT_NONE = 0,
+    BD_CRYPTO_LUKS_REENCRYPT_CLEAN,
+    BD_CRYPTO_LUKS_REENCRYPT_CRASH,
+    BD_CRYPTO_LUKS_REENCRYPT_INVALID
+} BDCryptoLUKSReencryptStatus;
+
+typedef enum {
+    BD_CRYPTO_LUKS_REENCRYPT = 0,
+    BD_CRYPTO_LUKS_ENCRYPT,
+    BD_CRYPTO_LUKS_DECRYPT,
+} BDCryptoLUKSReencryptMode;
+
+
 gboolean bd_crypto_luks_reencrypt(const gchar *device, BDCryptoLUKSReencryptParams *params, BDCryptoKeyslotContext *context, BDCryptoLUKSReencryptProgFunc progFunc, GError **error);
+BDCryptoLUKSReencryptStatus bd_crypto_luks_reencrypt_status (const gchar *device, BDCryptoLUKSReencryptMode *mode, GError **error);
 
 BDCryptoLUKSInfo* bd_crypto_luks_info (const gchar *device, GError **error);
 BDCryptoBITLKInfo* bd_crypto_bitlk_info (const gchar *device, GError **error);
