@@ -51,7 +51,7 @@ class CryptoTestCase(unittest.TestCase):
             BlockDev.init(cls.requested_plugins, None)
         else:
             BlockDev.reinit(cls.requested_plugins, True, None)
-        #BlockDev.utils_init_logging(print)
+        BlockDev.utils_init_logging(print)
 
 
     def setUp(self):
@@ -1219,9 +1219,10 @@ class CryptoTestReencrypt(CryptoTestCase):
             new_volume_key=new_volume_key
         )
 
-        BlockDev.crypto_luks_reencrypt(device, params, ctx, prog_func)
-        mode_after = BlockDev.crypto_luks_info(device).mode
+        succ = BlockDev.crypto_luks_reencrypt(device, params, ctx, prog_func)
+        self.assertTrue(succ)
 
+        mode_after = BlockDev.crypto_luks_info(device).mode
         self.assertEqual(mode_after, requested_mode)
         self.assertNotEqual(mode_before, mode_after)
 
@@ -1313,6 +1314,47 @@ class CryptoTestReencrypt(CryptoTestCase):
         volume_key_after = self._get_volume_key()
 
         self.assertEqual(volume_key_before, volume_key_after)
+
+    stop_counter = 0
+    def _stop_after_two(self, size: int, offset: int) -> int:
+        if self.stop_counter >= 2:
+            return 1
+
+        self.stop_counter += 1
+        return 0
+
+    @tag_test(TestTags.SLOW, TestTags.CORE)
+    def test_stop_resume_offline(self):
+        """ Verify that offline reencryption can be stopped and resumed """
+        self._luks2_format(self.loop_dev, PASSWD)
+        ctx = BlockDev.CryptoKeyslotContext(passphrase=PASSWD)
+
+        self.stop_counter = 0
+        self._luks_reencrypt(device=self.loop_dev, ctx=ctx, offline=True, prog_func=self._stop_after_two)
+        self.assertEqual(self.stop_counter, 2)
+
+
+        # reencryption should be stopped now, try to resume
+        print(BlockDev.crypto_luks_reencrypt_status(self.loop_dev))
+        succ = BlockDev.crypto_luks_reencrypt_resume(self.loop_dev, ctx, None)
+        self.assertTrue(succ)
+
+    @tag_test(TestTags.SLOW, TestTags.CORE)
+    def test_stop_resume_online(self):
+        """ Verify that offline reencryption can be stopped and resumed """
+        self._luks2_format(self.loop_dev, PASSWD)
+        ctx = BlockDev.CryptoKeyslotContext(passphrase=PASSWD)
+
+        succ = BlockDev.crypto_luks_open(self.loop_dev, "libblockdevTestLUKS", ctx, False)
+        self.assertTrue(succ)
+
+        self.stop_counter = 0
+        self._luks_reencrypt(device="libblockdevTestLUKS", ctx=ctx, offline=False, prog_func=self._stop_after_two)
+        self.assertEqual(self.stop_counter, 2)
+
+        # reencryption should be stopped now, try to resume
+        succ = BlockDev.crypto_luks_reencrypt_resume("libblockdevTestLUKS", ctx, None)
+        self.assertTrue(succ)
 
     @tag_test(TestTags.SLOW, TestTags.CORE)
     def test_status(self):

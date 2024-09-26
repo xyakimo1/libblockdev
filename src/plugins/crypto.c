@@ -2361,6 +2361,7 @@ gboolean bd_crypto_luks_reencrypt (const gchar *device, BDCryptoLUKSReencryptPar
     struct crypt_device *cd = NULL;
     struct crypt_params_reencrypt paramsReencrypt = {};
     struct crypt_params_luks2 paramsLuks2 = {};
+    struct reencryption_progress_struct usrptr;
 
     guint key_size = params->key_size / 8; // convert bits to bytes
     char *volume_key = NULL;
@@ -2483,10 +2484,8 @@ gboolean bd_crypto_luks_reencrypt (const gchar *device, BDCryptoLUKSReencryptPar
     }
 
     // marshal to usrptr
-    struct reencryption_progress_struct usrptr = {
-            .progress_id = progress_id,
-            .usr_func = prog_func
-    };
+    usrptr.progress_id = progress_id;
+    usrptr.usr_func = prog_func;
 
     ret = crypt_reencrypt_run (cd, reencryption_progress, &usrptr);
     if (ret != 0) {
@@ -2568,9 +2567,92 @@ BDCryptoLUKSReencryptStatus bd_crypto_luks_reencrypt_status (const gchar *device
     return to_return;
 }
 
-//gboolean bd_crypto_luks_reencrypt_resume (const gchar *device, BDCryptoLUKSReencryptParams *params, BDCryptoKeyslotContext *context, BDCryptoLUKSReencryptProgFunc prog_func, GError **error) {
-    // TODO
-//}
+gboolean bd_crypto_luks_reencrypt_resume (const gchar *device, BDCryptoKeyslotContext *context, BDCryptoLUKSReencryptProgFunc prog_func, GError **error) {
+    struct crypt_device *cd = NULL;
+    struct crypt_params_reencrypt paramsReencrypt = {.flags = CRYPT_REENCRYPT_RESUME_ONLY};
+    struct reencryption_progress_struct usrptr = {};
+
+    gboolean online = TRUE;
+    gint ret = 0;
+    guint64 progress_id = 0;
+    gchar *msg = NULL;
+    GError *l_error = NULL;
+
+    msg = g_strdup_printf ("Resuming reencryption of LUKS device '%s'", device);
+    progress_id = bd_utils_report_started (msg);
+    g_free (msg);
+
+    ret = crypt_init_by_name (&cd, device);
+    if (ret != 0) {
+        // device is probably not active, try offline initialization
+        crypt_free (cd);
+        ret = crypt_init (&cd, device);
+        if (ret != 0) {
+            g_set_error (&l_error, BD_CRYPTO_ERROR, BD_CRYPTO_ERROR_DEVICE,
+                         "Failed to initialize device: %s", strerror_l(-ret, c_locale));
+            bd_utils_report_finished (progress_id, l_error->message);
+            g_propagate_error (error, l_error);
+            return FALSE;
+        }
+
+        ret = crypt_load (cd, CRYPT_LUKS, NULL);
+        if (ret != 0) {
+            g_set_error (&l_error, BD_CRYPTO_ERROR, BD_CRYPTO_ERROR_DEVICE,
+                         "Failed to load device: %s", strerror_l(-ret, c_locale));
+            crypt_free (cd);
+            bd_utils_report_finished (progress_id, l_error->message);
+            g_propagate_error (error, l_error);
+            return FALSE;
+        }
+        online = FALSE;
+    }
+
+    if (context->type != BD_CRYPTO_KEYSLOT_CONTEXT_TYPE_PASSPHRASE) {
+        g_set_error (&l_error, BD_CRYPTO_ERROR, BD_CRYPTO_ERROR_INVALID_CONTEXT,
+                     "Only the 'passphrase' context type is supported for LUKS reencrypt.");
+        bd_utils_report_finished (progress_id, l_error->message);
+        g_propagate_error (error, l_error);
+        crypt_free (cd);
+        return FALSE;
+    }
+
+    // Initialize reencryption
+    ret = crypt_reencrypt_init_by_passphrase (cd,
+                                              online ? device : NULL,
+                                              (const char *) context->u.passphrase.pass_data,
+                                              context->u.passphrase.data_len,
+                                              0,
+                                              0,
+                                              NULL,
+                                              NULL,
+                                              &paramsReencrypt);
+    if (ret < 0) {
+        g_set_error (&l_error, BD_CRYPTO_ERROR, BD_CRYPTO_ERROR_REENCRYPT_FAILED,
+                     "Failed to initialize previously stopped reencryption: %s", strerror_l(-ret, c_locale));
+        bd_utils_report_finished (progress_id, l_error->message);
+        g_propagate_error (error, l_error);
+        crypt_free (cd);
+        return FALSE;
+    }
+
+    // marshal to usrptr
+    usrptr.progress_id = progress_id;
+    usrptr.usr_func = prog_func;
+
+    ret = crypt_reencrypt_run (cd, reencryption_progress, &usrptr);
+    if (ret != 0) {
+        g_set_error (&l_error, BD_CRYPTO_ERROR, BD_CRYPTO_ERROR_REENCRYPT_FAILED,
+                     "Reencryption failed: %s", strerror_l(-ret, c_locale));
+        bd_utils_report_finished (progress_id, l_error->message);
+        g_propagate_error (error, l_error);
+        crypt_free (cd);
+        return FALSE;
+    }
+
+    crypt_free (cd);
+    bd_utils_report_finished (progress_id, "Completed.");
+    return TRUE;
+}
 
 static gint synced_close (gint fd) {
     gint ret = 0;

@@ -347,8 +347,9 @@ typedef enum {
 } BDCryptoLUKSReencryptMode;
 
 
-gboolean bd_crypto_luks_reencrypt(const gchar *device, BDCryptoLUKSReencryptParams *params, BDCryptoKeyslotContext *context, BDCryptoLUKSReencryptProgFunc progFunc, GError **error);
+gboolean bd_crypto_luks_reencrypt(const gchar *device, BDCryptoLUKSReencryptParams *params, BDCryptoKeyslotContext *context, BDCryptoLUKSReencryptProgFunc prog_func, GError **error);
 BDCryptoLUKSReencryptStatus bd_crypto_luks_reencrypt_status (const gchar *device, BDCryptoLUKSReencryptMode *mode, GError **error);
+gboolean bd_crypto_luks_reencrypt_resume (const gchar *device, BDCryptoKeyslotContext *context, BDCryptoLUKSReencryptProgFunc prog_func, GError **error);
 
 BDCryptoLUKSInfo* bd_crypto_luks_info (const gchar *device, GError **error);
 BDCryptoBITLKInfo* bd_crypto_bitlk_info (const gchar *device, GError **error);
