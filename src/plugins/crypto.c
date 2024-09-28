@@ -2341,8 +2341,10 @@ struct reencryption_progress_struct {
 };
 
 static int reencryption_progress (uint64_t size, uint64_t offset, void *usrptr) {
-    if (usrptr == NULL) // then wrong usage on the dev side. we should report progress, so we need progress_id
+    if (usrptr == NULL) { // then wrong usage. we should report progress, so we need progress_id
+        bd_utils_log_format(BD_UTILS_LOG_WARNING, "Empty usrptr in reencryption progress.");
         return 0;
+    }
 
     // unmarshal usrptr
     guint64 progress_id = ((struct reencryption_progress_struct *) usrptr)->progress_id;
@@ -2367,6 +2369,7 @@ gboolean bd_crypto_luks_reencrypt (const gchar *device, BDCryptoLUKSReencryptPar
     char *volume_key = NULL;
     uint32_t keyslot_flags = params->new_volume_key ? CRYPT_VOLUME_KEY_NO_SEGMENT : 0;
     int allocated_keyslot;
+    gchar *requested_pbkdf = "NULL";
     gint ret = 0;
     guint64 progress_id = 0;
     gchar *msg = NULL;
@@ -2463,6 +2466,13 @@ gboolean bd_crypto_luks_reencrypt (const gchar *device, BDCryptoLUKSReencryptPar
 
     paramsLuks2.sector_size = params->sector_size;
     paramsLuks2.pbkdf = get_pbkdf_params (params->pbkdf, error);
+    if (paramsLuks2.pbkdf == NULL) {
+        // get info to log
+        if (params->pbkdf != NULL && params->pbkdf->type != NULL) {
+            requested_pbkdf = params->pbkdf->type;
+        }
+        bd_utils_log_format (BD_UTILS_LOG_WARNING, "Got empty PBKDF parameters for PBKDF '%s'.", requested_pbkdf);
+    }
 
     // Initialize reencryption
     ret = crypt_reencrypt_init_by_passphrase (cd,
