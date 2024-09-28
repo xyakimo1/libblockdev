@@ -2569,8 +2569,7 @@ BDCryptoLUKSReencryptStatus bd_crypto_luks_reencrypt_status (const gchar *device
 
 gboolean bd_crypto_luks_reencrypt_resume (const gchar *device, BDCryptoKeyslotContext *context, BDCryptoLUKSReencryptProgFunc prog_func, GError **error) {
     struct crypt_device *cd = NULL;
-    struct crypt_params_luks2 paramsLuks2 = {};
-    struct crypt_params_reencrypt paramsReencrypt = {.flags = CRYPT_REENCRYPT_RESUME_ONLY, .luks2 = &paramsLuks2};
+    struct crypt_params_reencrypt paramsReencrypt = {.flags = CRYPT_REENCRYPT_RESUME_ONLY};
     struct reencryption_progress_struct usrptr = {};
 
     gboolean online = TRUE;

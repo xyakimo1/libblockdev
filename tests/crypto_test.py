@@ -51,7 +51,7 @@ class CryptoTestCase(unittest.TestCase):
             BlockDev.init(cls.requested_plugins, None)
         else:
             BlockDev.reinit(cls.requested_plugins, True, None)
-        BlockDev.utils_init_logging(print)
+        #BlockDev.utils_init_logging(print)
 
 
     def setUp(self):
@@ -1329,15 +1329,23 @@ class CryptoTestReencrypt(CryptoTestCase):
         self._luks2_format(self.loop_dev, PASSWD)
         ctx = BlockDev.CryptoKeyslotContext(passphrase=PASSWD)
 
+        status, mode = BlockDev.crypto_luks_reencrypt_status(self.loop_dev)
+        self.assertEqual(status, BlockDev.CryptoLUKSReencryptStatus.NONE)
+
         self.stop_counter = 0
         self._luks_reencrypt(device=self.loop_dev, ctx=ctx, offline=True, prog_func=self._stop_after_two)
         self.assertEqual(self.stop_counter, 2)
 
+        # reencryption should be stopped now
+        status, mode = BlockDev.crypto_luks_reencrypt_status(self.loop_dev)
+        self.assertEqual(status, BlockDev.CryptoLUKSReencryptStatus.CLEAN)
+        self.assertEqual(mode, BlockDev.CryptoLUKSReencryptMode.REENCRYPT)
 
-        # reencryption should be stopped now, try to resume
-        print(BlockDev.crypto_luks_reencrypt_status(self.loop_dev))
         succ = BlockDev.crypto_luks_reencrypt_resume(self.loop_dev, ctx, None)
         self.assertTrue(succ)
+
+        status, mode = BlockDev.crypto_luks_reencrypt_status(self.loop_dev)
+        self.assertEqual(status, BlockDev.CryptoLUKSReencryptStatus.NONE)
 
     @tag_test(TestTags.SLOW, TestTags.CORE)
     def test_stop_resume_online(self):
@@ -1357,12 +1365,10 @@ class CryptoTestReencrypt(CryptoTestCase):
         self.assertTrue(succ)
 
     @tag_test(TestTags.SLOW, TestTags.CORE)
-    def test_status(self):
-        """ Verify that reencryption status reporting works """
-        self._luks2_format(self.loop_dev, PASSWD)
-
-        status, mode = BlockDev.crypto_luks_reencrypt_status(self.loop_dev)
-        self.assertEqual(status, BlockDev.CryptoLUKSReencryptStatus.NONE)
+    def test_resume_xfail(self):
+        """ Verify that non-existent reencryption cannot be resumed """
+        # TODO
+        pass
 
 class CryptoTestLuksSectorSize(CryptoTestCase):
     def setUp(self):
