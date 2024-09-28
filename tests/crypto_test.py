@@ -1382,8 +1382,19 @@ class CryptoTestReencrypt(CryptoTestCase):
     @tag_test(TestTags.SLOW, TestTags.CORE)
     def test_resume_xfail(self):
         """ Verify that non-existent reencryption cannot be resumed """
-        # TODO
-        pass
+
+        self._luks2_format(self.loop_dev, PASSWD)
+        ctx = BlockDev.CryptoKeyslotContext(passphrase=PASSWD)
+
+        with self.assertRaisesRegex(GLib.GError, r"Failed to initialize previously stopped reencryption:"):
+            succ = BlockDev.crypto_luks_reencrypt_resume(self.loop_dev, ctx, None)
+            self.assertFalse(succ)
+
+        succ = BlockDev.crypto_luks_open(self.loop_dev, "libblockdevTestLUKS", ctx, False)
+        self.assertTrue(succ)
+        with self.assertRaisesRegex(GLib.GError, r"Failed to initialize previously stopped reencryption:"):
+            succ = BlockDev.crypto_luks_reencrypt_resume("libblockdevTestLUKS", ctx, None)
+            self.assertFalse(succ)
 
 
 class CryptoTestLuksSectorSize(CryptoTestCase):
