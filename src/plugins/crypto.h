@@ -26,7 +26,7 @@ typedef enum {
     BD_CRYPTO_ERROR_KEYFILE_FAILED,
     BD_CRYPTO_ERROR_INVALID_CONTEXT,
     BD_CRYPTO_ERROR_CONVERT_FAILED,
-    BD_CRYPTO_ERROR_REENCRYPT_FAILED
+    BD_CRYPTO_ERROR_REENCRYPT_FAILED,
 } BDCryptoError;
 
 #define BD_CRYPTO_BACKUP_PASSPHRASE_CHARSET "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz./"
@@ -295,19 +295,19 @@ gboolean bd_crypto_luks_set_label (const gchar *device, const gchar *label, cons
 gboolean bd_crypto_luks_set_uuid (const gchar *device, const gchar *uuid, GError **error);
 gboolean bd_crypto_luks_convert (const gchar *device, BDCryptoLUKSVersion target_version, GError **error);
 
-// TODO
 /**
  * BDCryptoLUKSReencryptParams:
- * @key_size    New volume key size if @new_volume_key is true, ignored otherwise.
- * @cipher      New cipher.
- * @cipher_mode     New cipher mode.
- * @resilience      Resilience.
- * @hash            Hash.
- * @max_hotzone_size Max hotzone size.
- * @sector_size      Sector size.
- * @new_volume_key   Whether to generate a new volume key or keep the existing one.
- * @offline          Whether to perform an offline or online reencryption.
- * @pbkdf            PBDKF function parameters for the new keyslot.
+ * @key_size         new volume key size if @new_volume_key is true. Ignored otherwise
+ * @cipher           new cipher
+ * @cipher_mode      new cipher mode
+ * @resilience       resilience mode to be used during reencryption
+ * @hash             used hash for "checksum" resilience type, ignored otherwise
+ * @max_hotzone_size max hotzone size
+ * @sector_size      sector size. Note that 0 is not a valid value
+ * @new_volume_key   whether to generate a new volume key or keep the existing one
+ * @offline          whether to perform an offline or online reencryption,
+ *                     i.e. whether a device is active in the time of reencryption or not
+ * @pbkdf            PBDKF function parameters for a new keyslot
  */
 typedef struct BDCryptoLUKSReencryptParams {
     guint32 key_size;
@@ -328,8 +328,13 @@ BDCryptoLUKSReencryptParams* bd_crypto_luks_reencrypt_params_new(guint32 key_siz
 
 /**
  * BDCryptoLUKSReencryptProgFunc:
- * @size:
- * @offset:
+ * @size    size of the device being reencrypted
+ * @offset  current offset
+ *
+ * A callback function called during reencryption to report progress. Also used to possibly stop reencryption.
+ *
+ * Returns: 0, if the reencryption should continue.
+ *          A non-zero value to stop the reencryption
  */
 typedef int (*BDCryptoLUKSReencryptProgFunc) (guint64 size, guint64 offset);
 
@@ -345,7 +350,6 @@ typedef enum {
     BD_CRYPTO_LUKS_ENCRYPT,
     BD_CRYPTO_LUKS_DECRYPT,
 } BDCryptoLUKSReencryptMode;
-
 
 gboolean bd_crypto_luks_reencrypt(const gchar *device, BDCryptoLUKSReencryptParams *params, BDCryptoKeyslotContext *context, BDCryptoLUKSReencryptProgFunc prog_func, GError **error);
 BDCryptoLUKSReencryptStatus bd_crypto_luks_reencrypt_status (const gchar *device, BDCryptoLUKSReencryptMode *mode, GError **error);
