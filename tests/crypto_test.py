@@ -51,8 +51,6 @@ class CryptoTestCase(unittest.TestCase):
             BlockDev.init(cls.requested_plugins, None)
         else:
             BlockDev.reinit(cls.requested_plugins, True, None)
-        #BlockDev.utils_init_logging(print)
-
 
     def setUp(self):
         self.addCleanup(self._clean_up)
