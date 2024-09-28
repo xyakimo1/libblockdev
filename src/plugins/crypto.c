@@ -2623,7 +2623,7 @@ gboolean bd_crypto_luks_reencrypt_resume (const gchar *device, BDCryptoKeyslotCo
                                               (const char *) context->u.passphrase.pass_data,
                                               context->u.passphrase.data_len,
                                               CRYPT_ANY_SLOT,
-                                              0,
+                                              CRYPT_ANY_SLOT,
                                               NULL,
                                               NULL,
                                               &paramsReencrypt);
