@@ -1349,26 +1349,42 @@ class CryptoTestReencrypt(CryptoTestCase):
 
     @tag_test(TestTags.SLOW, TestTags.CORE)
     def test_stop_resume_online(self):
-        """ Verify that offline reencryption can be stopped and resumed """
+        """ Verify that online reencryption can be stopped and resumed """
         self._luks2_format(self.loop_dev, PASSWD)
         ctx = BlockDev.CryptoKeyslotContext(passphrase=PASSWD)
 
         succ = BlockDev.crypto_luks_open(self.loop_dev, "libblockdevTestLUKS", ctx, False)
         self.assertTrue(succ)
 
+        status, mode = BlockDev.crypto_luks_reencrypt_status("libblockdevTestLUKS")
+        self.assertEqual(status, BlockDev.CryptoLUKSReencryptStatus.NONE)
+
         self.stop_counter = 0
         self._luks_reencrypt(device="libblockdevTestLUKS", ctx=ctx, offline=False, prog_func=self._stop_after_two)
         self.assertEqual(self.stop_counter, 2)
 
-        # reencryption should be stopped now, try to resume
+        # reencryption should be stopped now
+        status, mode = BlockDev.crypto_luks_reencrypt_status("libblockdevTestLUKS")
+        self.assertEqual(status, BlockDev.CryptoLUKSReencryptStatus.CLEAN)
+        self.assertEqual(mode, BlockDev.CryptoLUKSReencryptMode.REENCRYPT)
+
+        succ = BlockDev.crypto_luks_close("libblockdevTestLUKS")
+        self.assertTrue(succ)
+        succ = BlockDev.crypto_luks_open(self.loop_dev, "libblockdevTestLUKS", ctx, False)
+        self.assertTrue(succ)
+
         succ = BlockDev.crypto_luks_reencrypt_resume("libblockdevTestLUKS", ctx, None)
         self.assertTrue(succ)
+
+        status, mode = BlockDev.crypto_luks_reencrypt_status("libblockdevTestLUKS")
+        self.assertEqual(status, BlockDev.CryptoLUKSReencryptStatus.NONE)
 
     @tag_test(TestTags.SLOW, TestTags.CORE)
     def test_resume_xfail(self):
         """ Verify that non-existent reencryption cannot be resumed """
         # TODO
         pass
+
 
 class CryptoTestLuksSectorSize(CryptoTestCase):
     def setUp(self):

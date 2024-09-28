@@ -2509,19 +2509,24 @@ BDCryptoLUKSReencryptStatus bd_crypto_luks_reencrypt_status (const gchar *device
 
     gint ret = 0;
 
-    ret = crypt_init (&cd, device);
+    ret = crypt_init_by_name (&cd, device);
     if (ret != 0) {
-        g_set_error (error, BD_CRYPTO_ERROR, BD_CRYPTO_ERROR_DEVICE,
-                     "Failed to initialize device: %s", strerror_l (-ret, c_locale));
-        return FALSE;
-    }
-
-    ret = crypt_load (cd, CRYPT_LUKS, NULL);
-    if (ret != 0) {
-        g_set_error (error, BD_CRYPTO_ERROR, BD_CRYPTO_ERROR_DEVICE,
-                     "Failed to load device: %s", strerror_l (-ret, c_locale));
+        // device is probably not active, try offline initialization
         crypt_free (cd);
-        return FALSE;
+        ret = crypt_init (&cd, device);
+        if (ret != 0) {
+            g_set_error (error, BD_CRYPTO_ERROR, BD_CRYPTO_ERROR_DEVICE,
+                         "Failed to initialize device: %s", strerror_l (-ret, c_locale));
+            return FALSE;
+        }
+
+        ret = crypt_load (cd, CRYPT_LUKS, NULL);
+        if (ret != 0) {
+            g_set_error (error, BD_CRYPTO_ERROR, BD_CRYPTO_ERROR_DEVICE,
+                         "Failed to load device: %s", strerror_l (-ret, c_locale));
+            crypt_free (cd);
+            return FALSE;
+        }
     }
 
     ret = crypt_reencrypt_status (cd, &paramsReencrypt);
