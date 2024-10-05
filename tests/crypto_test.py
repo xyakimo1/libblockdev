@@ -1413,6 +1413,33 @@ class CryptoTestReencrypt(CryptoTestCase):
 
 
 class CryptoTestEncrypt(CryptoTestCase):
+    def setUp(self):
+        CryptoTestCase.setUp(self)
+
+        # create partition
+        ret, _out, _err = run_command("parted %s mklabel gpt" % self.loop_dev)
+        self.assertEqual(ret, 0)
+        ret, _out, _err = run_command(f"parted {self.loop_dev} mkpart primary 0% 100%")
+        self.assertEqual(ret, 0)
+        self.partition = self.loop_dev + "1"
+        self.assertTrue(os.path.exists(self.partition))
+
+        # create filesystem
+        ret, _out, _err = run_command("mkfs.ext4 %s " % self.partition)
+        self.assertEqual(ret, 0)
+
+        # add a file to filesystem to later check, if it is still readable after encryption
+        with tempfile.TemporaryDirectory() as mount_path:
+            ret, _out, _err = run_command("mount %s %s" % (self.partition, mount_path))
+            print("\n", _out, _err)
+            self.assertEqual(ret, 0)
+
+            ret, _out, _err = run_command("umount %s" % mount_path)
+            self.assertEqual(ret, 0)
+
+    def _clean_up(self):
+        CryptoTestCase._clean_up(self)
+
     @tag_test(TestTags.SLOW, TestTags.CORE)
     def test_offline_encryption(self):
         """ Verify that offline encryption works """
