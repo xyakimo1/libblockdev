@@ -2552,6 +2552,147 @@ gboolean bd_crypto_luks_reencrypt (const gchar *device, BDCryptoLUKSReencryptPar
  * Tech category: %BD_CRYPTO_TECH_LUKS-%BD_CRYPTO_TECH_MODE_MODIFY
  */
 gboolean bd_crypto_luks_encrypt (const gchar *device, BDCryptoLUKSReencryptParams *params, BDCryptoKeyslotContext *context, BDCryptoLUKSReencryptProgFunc prog_func, GError **error) {
+    struct crypt_device *cd = NULL;
+    struct crypt_params_reencrypt paramsReencrypt = {};
+    struct crypt_params_luks2 paramsLuks2 = {};
+    struct reencryption_progress_struct usrptr;
+
+    guint key_size = params->key_size / 8; /* convert bits to bytes */
+    const char *HEADER_FILE = "/tmp/libblockdev-crypto-luks-encrypt.tmp";
+//    uint32_t keyslot_flags = params->new_volume_key ? CRYPT_VOLUME_KEY_NO_SEGMENT : 0;
+    int allocated_keyslot;
+    gchar *requested_pbkdf = "NULL";
+    gint ret, fd = 0;
+    guint64 progress_id = 0;
+    gchar *msg = NULL;
+    GError *l_error = NULL;
+
+    msg = g_strdup_printf ("Started encryption of LUKS device '%s'", device);
+    progress_id = bd_utils_report_started (msg);
+    g_free (msg);
+
+    if (context->type != BD_CRYPTO_KEYSLOT_CONTEXT_TYPE_PASSPHRASE) {
+        g_set_error (&l_error, BD_CRYPTO_ERROR, BD_CRYPTO_ERROR_INVALID_CONTEXT,
+                     "Only the 'passphrase' context type is supported for LUKS encrypt.");
+        bd_utils_report_finished (progress_id, l_error->message);
+        g_propagate_error (error, l_error);
+        crypt_free (cd);
+        return FALSE;
+    }
+
+    fd = open(HEADER_FILE, O_CREAT|O_EXCL|O_WRONLY, S_IRUSR|S_IWUSR);
+    if (fd == -1) {
+        // possible to check if the open failed because such a file already exists.
+        g_set_error (&l_error, BD_CRYPTO_ERROR, BD_CRYPTO_ERROR_REENCRYPT_FAILED,
+                     "Failed to create temporary header file.");
+        bd_utils_report_finished (progress_id, l_error->message);
+        g_propagate_error (error, l_error);
+        crypt_free (cd);
+        return FALSE;
+    }
+
+    ret = posix_fallocate(fd, 0, 4096);
+    close(fd);
+    if (ret != 0) {
+        g_set_error (&l_error, BD_CRYPTO_ERROR, BD_CRYPTO_ERROR_REENCRYPT_FAILED,
+                     "Failed to allocate enough space for temporary header file.");
+        bd_utils_report_finished (progress_id, l_error->message);
+        g_propagate_error (error, l_error);
+        unlink(HEADER_FILE);
+        crypt_free (cd);
+        return FALSE;
+    }
+
+    ret = crypt_init (&cd, HEADER_FILE);
+    if (ret != 0) {
+        g_set_error (&l_error, BD_CRYPTO_ERROR, BD_CRYPTO_ERROR_DEVICE,
+                     "Failed to initialize device with detached header: %s", strerror_l (-ret, c_locale));
+        bd_utils_report_finished (progress_id, l_error->message);
+        g_propagate_error (error, l_error);
+        return FALSE;
+    }
+
+    paramsLuks2.data_device = device;
+    ret = crypt_format (cd, "LUKS2", params->cipher, params->cipher_mode, NULL, NULL, key_size, &paramsLuks2);
+    if (ret < 0) {
+        g_set_error (&l_error, BD_CRYPTO_ERROR, BD_CRYPTO_ERROR_REENCRYPT_FAILED,
+                     "Failed to format a header file: %s", strerror_l (-ret, c_locale));
+        bd_utils_report_finished (progress_id, l_error->message);
+        g_propagate_error (error, l_error);
+        unlink(HEADER_FILE);
+        crypt_free (cd);
+        return FALSE;
+    }
+
+    unlink(HEADER_FILE);
+    crypt_free(cd);
+    return TRUE;
+
+    if (ret < 0) {
+        g_set_error (&l_error, BD_CRYPTO_ERROR, BD_CRYPTO_ERROR_ADD_KEY,
+                     "Failed to add key: %s", strerror_l (-ret, c_locale));
+        bd_utils_report_finished (progress_id, l_error->message);
+        g_propagate_error (error, l_error);
+        crypt_free (cd);
+        return FALSE;
+    }
+    allocated_keyslot = ret;
+    bd_utils_report_progress (progress_id, 10, "Added new keyslot");
+
+    paramsReencrypt.mode = CRYPT_REENCRYPT_ENCRYPT;
+    paramsReencrypt.direction = CRYPT_REENCRYPT_FORWARD;
+    paramsReencrypt.resilience = params->resilience;
+    paramsReencrypt.hash = params->hash;
+    paramsReencrypt.data_shift = 0;
+    paramsReencrypt.max_hotzone_size = params->max_hotzone_size;
+    paramsReencrypt.device_size = 0;
+    paramsReencrypt.luks2 = &paramsLuks2;
+
+    paramsLuks2.sector_size = params->sector_size;
+    paramsLuks2.pbkdf = get_pbkdf_params (params->pbkdf, error);
+    if (paramsLuks2.pbkdf == NULL) {
+        /* get info to log */
+        if (params->pbkdf != NULL && params->pbkdf->type != NULL) {
+            requested_pbkdf = params->pbkdf->type;
+        }
+        bd_utils_log_format (BD_UTILS_LOG_WARNING, "Got empty PBKDF parameters for PBKDF '%s'.", requested_pbkdf);
+    }
+
+    /* Initialize reencryption */
+    ret = crypt_reencrypt_init_by_passphrase (cd,
+                                              params->offline ? NULL : device,
+                                              (const char *) context->u.passphrase.pass_data,
+                                              context->u.passphrase.data_len,
+                                              CRYPT_ANY_SLOT,
+                                              allocated_keyslot,
+                                              params->cipher,
+                                              params->cipher_mode,
+                                              &paramsReencrypt);
+    if (ret < 0) {
+        g_set_error (&l_error, BD_CRYPTO_ERROR, BD_CRYPTO_ERROR_REENCRYPT_FAILED,
+                     "Failed to initialize encryption: %s", strerror_l (-ret, c_locale));
+        bd_utils_report_finished (progress_id, l_error->message);
+        g_propagate_error (error, l_error);
+        crypt_free (cd);
+        return FALSE;
+    }
+
+    /* marshal to usrptr */
+    usrptr.progress_id = progress_id;
+    usrptr.usr_func = prog_func;
+
+    ret = crypt_reencrypt_run (cd, reencryption_progress, &usrptr);
+    if (ret != 0) {
+        g_set_error (&l_error, BD_CRYPTO_ERROR, BD_CRYPTO_ERROR_REENCRYPT_FAILED,
+                     "Reencryption failed: %s", strerror_l (-ret, c_locale));
+        bd_utils_report_finished (progress_id, l_error->message);
+        g_propagate_error (error, l_error);
+        crypt_free (cd);
+        return FALSE;
+    }
+
+    crypt_free (cd);
+    bd_utils_report_finished (progress_id, "Completed.");
     return TRUE;
 }
 
