@@ -2580,59 +2580,68 @@ gboolean bd_crypto_luks_encrypt (const gchar *device, BDCryptoLUKSReencryptParam
         return FALSE;
     }
 
-    fd = open(HEADER_FILE, O_CREAT|O_EXCL|O_WRONLY, S_IRUSR|S_IWUSR);
+    fd = open (HEADER_FILE, O_CREAT|O_EXCL|O_WRONLY, S_IRUSR|S_IWUSR);
     if (fd == -1) {
-        // possible to check if the open failed because such a file already exists.
-        g_set_error (&l_error, BD_CRYPTO_ERROR, BD_CRYPTO_ERROR_REENCRYPT_FAILED,
-                     "Failed to create temporary header file.");
+        if (errno == EEXIST) {
+            g_set_error (&l_error, BD_CRYPTO_ERROR, BD_CRYPTO_ERROR_REENCRYPT_FAILED,
+                         "Failed to create temporary header file: already exists at %s .", HEADER_FILE);
+        } else {
+            g_set_error (&l_error, BD_CRYPTO_ERROR, BD_CRYPTO_ERROR_REENCRYPT_FAILED,
+                         "Failed to create temporary header file.");
+        }
         bd_utils_report_finished (progress_id, l_error->message);
         g_propagate_error (error, l_error);
         crypt_free (cd);
         return FALSE;
     }
 
-    ret = posix_fallocate(fd, 0, 4096);
-    close(fd);
+    ret = posix_fallocate (fd, 0, 4096);
+    close (fd);
     if (ret != 0) {
         g_set_error (&l_error, BD_CRYPTO_ERROR, BD_CRYPTO_ERROR_REENCRYPT_FAILED,
                      "Failed to allocate enough space for temporary header file.");
         bd_utils_report_finished (progress_id, l_error->message);
         g_propagate_error (error, l_error);
-        unlink(HEADER_FILE);
+        unlink (HEADER_FILE);
         crypt_free (cd);
         return FALSE;
     }
 
     ret = crypt_init (&cd, HEADER_FILE);
-    if (ret != 0) {
+    if (ret < 0) {
         g_set_error (&l_error, BD_CRYPTO_ERROR, BD_CRYPTO_ERROR_DEVICE,
                      "Failed to initialize device with detached header: %s", strerror_l (-ret, c_locale));
         bd_utils_report_finished (progress_id, l_error->message);
         g_propagate_error (error, l_error);
+        unlink (HEADER_FILE);
         return FALSE;
     }
 
     paramsLuks2.data_device = device;
-    ret = crypt_format (cd, "LUKS2", params->cipher, params->cipher_mode, NULL, NULL, key_size, &paramsLuks2);
+    ret = crypt_format (cd, CRYPT_LUKS2, params->cipher, params->cipher_mode, NULL, NULL, key_size, &paramsLuks2);
     if (ret < 0) {
         g_set_error (&l_error, BD_CRYPTO_ERROR, BD_CRYPTO_ERROR_REENCRYPT_FAILED,
                      "Failed to format a header file: %s", strerror_l (-ret, c_locale));
         bd_utils_report_finished (progress_id, l_error->message);
         g_propagate_error (error, l_error);
-        unlink(HEADER_FILE);
+        unlink (HEADER_FILE);
         crypt_free (cd);
         return FALSE;
     }
 
-    unlink(HEADER_FILE);
-    crypt_free(cd);
-    return TRUE;
-
+    ret = crypt_keyslot_add_by_key (cd,
+                                    CRYPT_ANY_SLOT,
+                                    NULL,
+                                    key_size,
+                                    (const char*) context->u.passphrase.pass_data,
+                                    context->u.passphrase.data_len,
+                                    0);
     if (ret < 0) {
         g_set_error (&l_error, BD_CRYPTO_ERROR, BD_CRYPTO_ERROR_ADD_KEY,
                      "Failed to add key: %s", strerror_l (-ret, c_locale));
         bd_utils_report_finished (progress_id, l_error->message);
         g_propagate_error (error, l_error);
+        unlink (HEADER_FILE);
         crypt_free (cd);
         return FALSE;
     }
@@ -2646,6 +2655,7 @@ gboolean bd_crypto_luks_encrypt (const gchar *device, BDCryptoLUKSReencryptParam
     paramsReencrypt.data_shift = 0;
     paramsReencrypt.max_hotzone_size = params->max_hotzone_size;
     paramsReencrypt.device_size = 0;
+    paramsReencrypt.flags = CRYPT_REENCRYPT_INITIALIZE_ONLY;
     paramsReencrypt.luks2 = &paramsLuks2;
 
     paramsLuks2.sector_size = params->sector_size;
@@ -2673,6 +2683,53 @@ gboolean bd_crypto_luks_encrypt (const gchar *device, BDCryptoLUKSReencryptParam
                      "Failed to initialize encryption: %s", strerror_l (-ret, c_locale));
         bd_utils_report_finished (progress_id, l_error->message);
         g_propagate_error (error, l_error);
+        unlink (HEADER_FILE);
+        crypt_free (cd);
+        return FALSE;
+    }
+
+    /* Set header from temporary file to disk */
+    /*   Re-init without detached header */
+    crypt_free (cd);
+    cd = NULL;
+    ret = crypt_init (&cd, device);
+    if (ret < 0) {
+        g_set_error (&l_error, BD_CRYPTO_ERROR, BD_CRYPTO_ERROR_DEVICE,
+                     "Failed to re-initialize device: %s", strerror_l (-ret, c_locale));
+        bd_utils_report_finished (progress_id, l_error->message);
+        g_propagate_error (error, l_error);
+        unlink (HEADER_FILE);
+        return FALSE;
+    }
+
+    /*   Set header */
+    ret = crypt_header_restore (cd, CRYPT_LUKS2, HEADER_FILE);
+    if (ret < 0) {
+        g_set_error (&l_error, BD_CRYPTO_ERROR, BD_CRYPTO_ERROR_DEVICE,
+                     "Failed to re-initialize device: %s", strerror_l (-ret, c_locale));
+        bd_utils_report_finished (progress_id, l_error->message);
+        g_propagate_error (error, l_error);
+        unlink (HEADER_FILE);
+        crypt_free (cd);
+        return FALSE;
+    }
+
+    paramsReencrypt.flags &= ~CRYPT_REENCRYPT_INITIALIZE_ONLY;
+    ret = crypt_reencrypt_init_by_passphrase (cd,
+                                              params->offline ? NULL : device,
+                                              (const char *) context->u.passphrase.pass_data,
+                                              context->u.passphrase.data_len,
+                                              CRYPT_ANY_SLOT,
+                                              allocated_keyslot,
+                                              params->cipher,
+                                              params->cipher_mode,
+                                              &paramsReencrypt);
+    if (ret < 0) {
+        g_set_error (&l_error, BD_CRYPTO_ERROR, BD_CRYPTO_ERROR_REENCRYPT_FAILED,
+                     "Failed to re-initialize encryption: %s", strerror_l (-ret, c_locale));
+        bd_utils_report_finished (progress_id, l_error->message);
+        g_propagate_error (error, l_error);
+        unlink (HEADER_FILE);
         crypt_free (cd);
         return FALSE;
     }
@@ -2691,6 +2748,7 @@ gboolean bd_crypto_luks_encrypt (const gchar *device, BDCryptoLUKSReencryptParam
         return FALSE;
     }
 
+    unlink (HEADER_FILE);
     crypt_free (cd);
     bd_utils_report_finished (progress_id, "Completed.");
     return TRUE;
