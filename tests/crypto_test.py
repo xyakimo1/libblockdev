@@ -1431,7 +1431,6 @@ class CryptoTestEncrypt(CryptoTestCase):
         # add a file to filesystem to later check, if it is still readable after encryption
         with tempfile.TemporaryDirectory() as mount_path:
             ret, _out, _err = run_command("mount %s %s" % (self.partition, mount_path))
-            print("\n", _out, _err)
             self.assertEqual(ret, 0)
 
             ret, _out, _err = run_command("umount %s" % mount_path)
@@ -1443,18 +1442,28 @@ class CryptoTestEncrypt(CryptoTestCase):
     @tag_test(TestTags.SLOW, TestTags.CORE)
     def test_offline_encryption(self):
         """ Verify that offline encryption works """
-        is_luks = BlockDev.crypto_device_is_luks(self.loop_dev)
+        is_luks = BlockDev.crypto_device_is_luks(self.partition)
         self.assertFalse(is_luks)
 
         params = BlockDev.CryptoLUKSReencryptParams(key_size=256, cipher="aes", cipher_mode="cbc-essiv:sha256", offline=True)
         ctx = BlockDev.CryptoKeyslotContext(passphrase=PASSWD)
 
-        succ = BlockDev.crypto_luks_encrypt(self.loop_dev, params, ctx)
+        succ = BlockDev.crypto_luks_encrypt(self.partition, params, ctx)
         self.assertTrue(succ)
 
-        is_luks = BlockDev.crypto_device_is_luks(self.loop_dev)
+        is_luks = BlockDev.crypto_device_is_luks(self.partition)
         self.assertTrue(is_luks)
 
+        succ = BlockDev.crypto_luks_open(self.partition, "libblockdevTestLUKS", ctx, False)
+        self.assertTrue(succ)
+        self.assertTrue(os.path.exists("/dev/mapper/libblockdevTestLUKS"))
+
+        with tempfile.TemporaryDirectory() as mount_path:
+            ret, _out, _err = run_command("mount /dev/mapper/libblockdevTestLUKS %s" % mount_path)
+            self.assertEqual(ret, 0)
+
+            ret, _out, _err = run_command("umount %s" % mount_path)
+            self.assertEqual(ret, 0)
 
 class CryptoTestLuksSectorSize(CryptoTestCase):
     def setUp(self):
