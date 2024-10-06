@@ -1422,7 +1422,11 @@ class CryptoTestEncrypt(CryptoTestCase):
         needed_fs_size = (int) (partition_size / (1024 * 1024)) - 32 # in MB, leave 32 MB for LUKS2 headers
 
         # create filesystem
-        ret, _out, _err = run_command(f"mkfs.ext4 {self.loop_dev} {needed_fs_size}m")
+        ret, _out, _err = run_command(f"mkfs.ext4 {self.loop_dev}")
+        self.assertEqual(ret, 0)
+        ret, _out, _err = run_command(f"e2fsck -f -y {self.loop_dev}")
+        self.assertEqual(ret, 0)
+        ret, _out, _err = run_command(f"resize2fs {self.loop_dev} {needed_fs_size}M")
         self.assertEqual(ret, 0)
 
         # add a file to filesystem to later check, if it is still readable after encryption

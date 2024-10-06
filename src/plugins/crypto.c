@@ -2652,7 +2652,7 @@ gboolean bd_crypto_luks_encrypt (const gchar *device, BDCryptoLUKSReencryptParam
     paramsReencrypt.direction = CRYPT_REENCRYPT_FORWARD;
     paramsReencrypt.resilience = params->resilience;
     paramsReencrypt.hash = params->hash;
-    paramsReencrypt.data_shift = 32 * 1024 * 1024;
+    paramsReencrypt.data_shift = 0;
     paramsReencrypt.max_hotzone_size = params->max_hotzone_size;
     paramsReencrypt.device_size = 0;
     paramsReencrypt.flags = CRYPT_REENCRYPT_INITIALIZE_ONLY;
