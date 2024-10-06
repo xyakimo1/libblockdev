@@ -51,6 +51,7 @@ class CryptoTestCase(unittest.TestCase):
             BlockDev.init(cls.requested_plugins, None)
         else:
             BlockDev.reinit(cls.requested_plugins, True, None)
+        BlockDev.utils_init_logging(print)
 
     def setUp(self):
         self.addCleanup(self._clean_up)
@@ -1424,8 +1425,12 @@ class CryptoTestEncrypt(CryptoTestCase):
         self.partition = self.loop_dev + "1"
         self.assertTrue(os.path.exists(self.partition))
 
+        _ret, out, _err = run_command(f"blockdev --getsize64 {self.partition}")
+        partition_size = int(out) # bytes
+        needed_fs_size = (int) (partition_size / (1024 * 1024)) - 32 # in MB, leave 32 MB for LUKS2 headers
+
         # create filesystem
-        ret, _out, _err = run_command("mkfs.ext4 %s " % self.partition)
+        ret, _out, _err = run_command(f"mkfs.ext4 {self.partition} {needed_fs_size}m")
         self.assertEqual(ret, 0)
 
         # add a file to filesystem to later check, if it is still readable after encryption
