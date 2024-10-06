@@ -1417,26 +1417,20 @@ class CryptoTestEncrypt(CryptoTestCase):
     def setUp(self):
         CryptoTestCase.setUp(self)
 
-        # create partition
-        ret, _out, _err = run_command("parted %s mklabel gpt" % self.loop_dev)
-        self.assertEqual(ret, 0)
-        ret, _out, _err = run_command(f"parted {self.loop_dev} mkpart primary 0% 100%")
-        self.assertEqual(ret, 0)
-        self.partition = self.loop_dev + "1"
-        self.assertTrue(os.path.exists(self.partition))
-
-        _ret, out, _err = run_command(f"blockdev --getsize64 {self.partition}")
+        _ret, out, _err = run_command(f"blockdev --getsize64 {self.loop_dev}")
         partition_size = int(out) # bytes
         needed_fs_size = (int) (partition_size / (1024 * 1024)) - 32 # in MB, leave 32 MB for LUKS2 headers
 
         # create filesystem
-        ret, _out, _err = run_command(f"mkfs.ext4 {self.partition} {needed_fs_size}m")
+        ret, _out, _err = run_command(f"mkfs.ext4 {self.loop_dev} {needed_fs_size}m")
         self.assertEqual(ret, 0)
 
         # add a file to filesystem to later check, if it is still readable after encryption
         with tempfile.TemporaryDirectory() as mount_path:
-            ret, _out, _err = run_command("mount %s %s" % (self.partition, mount_path))
+            ret, _out, _err = run_command("mount %s %s" % (self.loop_dev, mount_path))
             self.assertEqual(ret, 0)
+
+            # TODO add file
 
             ret, _out, _err = run_command("umount %s" % mount_path)
             self.assertEqual(ret, 0)
@@ -1447,19 +1441,19 @@ class CryptoTestEncrypt(CryptoTestCase):
     @tag_test(TestTags.SLOW, TestTags.CORE)
     def test_offline_encryption(self):
         """ Verify that offline encryption works """
-        is_luks = BlockDev.crypto_device_is_luks(self.partition)
+        is_luks = BlockDev.crypto_device_is_luks(self.loop_dev)
         self.assertFalse(is_luks)
 
         params = BlockDev.CryptoLUKSReencryptParams(key_size=256, cipher="aes", cipher_mode="cbc-essiv:sha256", offline=True)
         ctx = BlockDev.CryptoKeyslotContext(passphrase=PASSWD)
 
-        succ = BlockDev.crypto_luks_encrypt(self.partition, params, ctx)
+        succ = BlockDev.crypto_luks_encrypt(self.loop_dev, params, ctx)
         self.assertTrue(succ)
 
-        is_luks = BlockDev.crypto_device_is_luks(self.partition)
+        is_luks = BlockDev.crypto_device_is_luks(self.loop_dev)
         self.assertTrue(is_luks)
 
-        succ = BlockDev.crypto_luks_open(self.partition, "libblockdevTestLUKS", ctx, False)
+        succ = BlockDev.crypto_luks_open(self.loop_dev, "libblockdevTestLUKS", ctx, False)
         self.assertTrue(succ)
         self.assertTrue(os.path.exists("/dev/mapper/libblockdevTestLUKS"))
 
