@@ -1462,7 +1462,15 @@ class CryptoTestEncrypt(CryptoTestCase):
         self.assertTrue(os.path.exists("/dev/mapper/libblockdevTestLUKS"))
 
         with tempfile.TemporaryDirectory() as mount_path:
+            ret, _out, _err = run_command("cryptsetup luksDump %s" % self.loop_dev)
+            print()
+            print("Cryptsetup: Out:", _out)
+            print("Err:", _err)
+
             ret, _out, _err = run_command("mount /dev/mapper/libblockdevTestLUKS %s" % mount_path)
+            print("mount: Out:", _out)
+            print("Err:", _err)
+
             self.assertEqual(ret, 0)
 
             ret, _out, _err = run_command("umount %s" % mount_path)
