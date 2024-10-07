@@ -2531,6 +2531,28 @@ gboolean bd_crypto_luks_reencrypt (const gchar *device, BDCryptoLUKSReencryptPar
 }
 
 /**
+ * bd_crypto_luks_decrypt:
+ * @device:     device to reencrypt. Either an active device name for online reencryption, or a block device for offline reencryption.
+ *              Must match the @params's "offline" parameter
+ * @params:     reencryption parameters
+ * @context:    key slot context to unlock @device. The newly created keyslot will use the same context
+ * @prog_func: (scope call) (nullable): progress function. Also used to possibly stop reencryption
+ * @error: (out) (optional): place to store error (if any)
+ *
+ * Reencrypts @device. This could mean a change of cipher, cipher mode, or volume key, based on @params
+ *
+ * Returns: true,  if the reencryption was successful or gracefully stopped with @prog_func.
+ *          false, if an error occurred.
+ *
+ * Supported @context types for this function: passphrase
+ *
+ * Tech category: %BD_CRYPTO_TECH_LUKS-%BD_CRYPTO_TECH_MODE_MODIFY
+ */
+gboolean bd_crypto_luks_decrypt (const gchar *device, BDCryptoLUKSReencryptParams *params, BDCryptoKeyslotContext *context, BDCryptoLUKSReencryptProgFunc prog_func, GError **error) {
+    return TRUE;
+}
+
+/**
  * bd_crypto_luks_reencrypt_status:
  * @device:                     an active device name or a block device
  * @mode: (out):                the exact operation in the "reencryption family"
