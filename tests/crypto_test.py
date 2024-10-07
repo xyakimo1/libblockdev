@@ -1412,6 +1412,22 @@ class CryptoTestReencrypt(CryptoTestCase):
             self.assertFalse(succ)
 
 
+class CryptoTestDecrypt(CryptoTestCase):
+    @tag_test(TestTags.SLOW, TestTags.CORE)
+    def test_offline_decryption(self):
+        """ Verfiy that offline decryption works """
+        self._luks2_format(self.loop_dev, PASSWD)
+        ctx = BlockDev.CryptoKeyslotContext(passphrase=PASSWD)
+
+        is_luks = BlockDev.crypto_device_is_luks(self.loop_dev)
+        self.assertTrue(is_luks)
+
+        succ = BlockDev.crypto_luks_decrypt(self.loop_dev, None, ctx, None)
+        self.assertTrue(succ)
+
+        is_luks = BlockDev.crypto_device_is_luks(self.loop_dev)
+        self.assertFalse(is_luks)
+
 class CryptoTestLuksSectorSize(CryptoTestCase):
     def setUp(self):
         if not check_cryptsetup_version("2.4.0"):
