@@ -1422,11 +1422,44 @@ class CryptoTestDecrypt(CryptoTestCase):
         is_luks = BlockDev.crypto_device_is_luks(self.loop_dev)
         self.assertTrue(is_luks)
 
-        succ = BlockDev.crypto_luks_decrypt(self.loop_dev, None, ctx, None)
+        params = BlockDev.CryptoLUKSReencryptParams(
+            key_size=256,
+            cipher="aes",
+            cipher_mode="not_used",
+            offline=True
+        )
+
+        succ = BlockDev.crypto_luks_decrypt(self.loop_dev, params, ctx, None)
         self.assertTrue(succ)
 
         is_luks = BlockDev.crypto_device_is_luks(self.loop_dev)
         self.assertFalse(is_luks)
+
+    @tag_test(TestTags.SLOW, TestTags.CORE)
+    def test_online_decryption(self):
+        """ Verfiy that offline decryption works """
+        self._luks2_format(self.loop_dev, PASSWD)
+        ctx = BlockDev.CryptoKeyslotContext(passphrase=PASSWD)
+
+        is_luks = BlockDev.crypto_device_is_luks(self.loop_dev)
+        self.assertTrue(is_luks)
+
+        succ = BlockDev.crypto_luks_open(self.loop_dev, "libblockdevTestLUKS", ctx, False)
+        self.assertTrue(succ)
+
+        params = BlockDev.CryptoLUKSReencryptParams(
+            key_size=256,
+            cipher="aes",
+            cipher_mode="not_used",
+            offline=False
+        )
+
+        succ = BlockDev.crypto_luks_decrypt("libblockdevTestLUKS", params, ctx, None)
+        self.assertTrue(succ)
+
+        is_luks = BlockDev.crypto_device_is_luks(self.loop_dev)
+        self.assertFalse(is_luks)
+
 
 class CryptoTestLuksSectorSize(CryptoTestCase):
     def setUp(self):
