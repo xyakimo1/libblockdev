@@ -2559,7 +2559,6 @@ gboolean bd_crypto_luks_encrypt (const gchar *device, BDCryptoLUKSReencryptParam
 
     guint key_size = params->key_size / 8; /* convert bits to bytes */
     const char *HEADER_FILE = "/tmp/libblockdev-crypto-luks-encrypt.tmp";
-//    uint32_t keyslot_flags = params->new_volume_key ? CRYPT_VOLUME_KEY_NO_SEGMENT : 0;
     int allocated_keyslot;
     gchar *requested_pbkdf = "NULL";
     gint ret, fd = 0;
@@ -2619,7 +2618,6 @@ gboolean bd_crypto_luks_encrypt (const gchar *device, BDCryptoLUKSReencryptParam
 
     paramsLuks2.data_device = device;
     paramsLuks2.sector_size = params->sector_size;
-    paramsLuks2.data_alignment = 32 MiB / params->sector_size;
     paramsLuks2.pbkdf = get_pbkdf_params (params->pbkdf, error);
     if (paramsLuks2.pbkdf == NULL) {
         /* get info to log */
@@ -2629,6 +2627,7 @@ gboolean bd_crypto_luks_encrypt (const gchar *device, BDCryptoLUKSReencryptParam
         bd_utils_log_format (BD_UTILS_LOG_WARNING, "Got empty PBKDF parameters for PBKDF '%s'.", requested_pbkdf);
     }
 
+    crypt_set_data_offset (cd, 16 MiB / SECTOR_SIZE);
     ret = crypt_format (cd, CRYPT_LUKS2, params->cipher, params->cipher_mode, NULL, NULL, key_size, &paramsLuks2);
     if (ret < 0) {
         g_set_error (&l_error, BD_CRYPTO_ERROR, BD_CRYPTO_ERROR_REENCRYPT_FAILED,
@@ -2663,7 +2662,8 @@ gboolean bd_crypto_luks_encrypt (const gchar *device, BDCryptoLUKSReencryptParam
     paramsReencrypt.direction = CRYPT_REENCRYPT_FORWARD;
     paramsReencrypt.resilience = params->resilience;
     paramsReencrypt.hash = params->hash;
-    paramsReencrypt.data_shift = 0;
+    //paramsReencrypt.data_shift = 16 MiB;  // Invalid argument
+    paramsReencrypt.data_shift = 16 MiB / SECTOR_SIZE; // Operation not supported
     paramsReencrypt.max_hotzone_size = params->max_hotzone_size;
     paramsReencrypt.device_size = 0;
     paramsReencrypt.flags = CRYPT_REENCRYPT_INITIALIZE_ONLY;

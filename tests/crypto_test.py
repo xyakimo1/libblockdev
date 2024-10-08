@@ -1448,7 +1448,7 @@ class CryptoTestEncrypt(CryptoTestCase):
         is_luks = BlockDev.crypto_device_is_luks(self.loop_dev)
         self.assertFalse(is_luks)
 
-        params = BlockDev.CryptoLUKSReencryptParams(key_size=256, cipher="aes", cipher_mode="cbc-essiv:sha256", offline=True)
+        params = BlockDev.CryptoLUKSReencryptParams(key_size=256, cipher="aes", cipher_mode="cbc-essiv:sha256", offline=True, resilience="datashift-checksum")
         ctx = BlockDev.CryptoKeyslotContext(passphrase=PASSWD)
 
         succ = BlockDev.crypto_luks_encrypt(self.loop_dev, params, ctx)
