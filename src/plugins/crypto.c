@@ -2659,14 +2659,14 @@ gboolean bd_crypto_luks_encrypt (const gchar *device, BDCryptoLUKSReencryptParam
     bd_utils_report_progress (progress_id, 10, "Added new keyslot");
 
     paramsReencrypt.mode = CRYPT_REENCRYPT_ENCRYPT;
-    paramsReencrypt.direction = CRYPT_REENCRYPT_FORWARD;
+    paramsReencrypt.direction = CRYPT_REENCRYPT_BACKWARD;
     paramsReencrypt.resilience = params->resilience;
     paramsReencrypt.hash = params->hash;
-    //paramsReencrypt.data_shift = 16 MiB;  // Invalid argument
-    paramsReencrypt.data_shift = 16 MiB / SECTOR_SIZE; // Operation not supported
+    paramsReencrypt.data_shift = 16 MiB / SECTOR_SIZE;
     paramsReencrypt.max_hotzone_size = params->max_hotzone_size;
     paramsReencrypt.device_size = 0;
     paramsReencrypt.flags = CRYPT_REENCRYPT_INITIALIZE_ONLY;
+    paramsReencrypt.flags |= CRYPT_REENCRYPT_MOVE_FIRST_SEGMENT;
     paramsReencrypt.luks2 = &paramsLuks2;
 
     /* Initialize reencryption */
