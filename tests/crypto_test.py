@@ -51,7 +51,7 @@ class CryptoTestCase(unittest.TestCase):
             BlockDev.init(cls.requested_plugins, None)
         else:
             BlockDev.reinit(cls.requested_plugins, True, None)
-        BlockDev.utils_init_logging(print)
+        #BlockDev.utils_init_logging(print)
 
     def setUp(self):
         self.addCleanup(self._clean_up)
@@ -1475,6 +1475,55 @@ class CryptoTestEncrypt(CryptoTestCase):
 
             ret, _out, _err = run_command("umount %s" % mount_path)
             self.assertEqual(ret, 0)
+
+    @tag_test(TestTags.SLOW, TestTags.CORE)
+    def test_online_encryption_xfail(self):
+        """ Verify that online encryption fails when a file system is mounted directly """
+        is_luks = BlockDev.crypto_device_is_luks(self.loop_dev)
+        self.assertFalse(is_luks)
+
+        with tempfile.TemporaryDirectory() as mount_path:
+            ret, _out, _err = run_command("mount %s %s" % (self.loop_dev, mount_path))
+            self.assertEqual(ret, 0)
+
+            params = BlockDev.CryptoLUKSReencryptParams(key_size=256, cipher="aes", cipher_mode="cbc-essiv:sha256", offline=False, resilience="datashift")
+            ctx = BlockDev.CryptoKeyslotContext(passphrase=PASSWD)
+
+            with self.assertRaises(GLib.GError):
+                succ = BlockDev.crypto_luks_encrypt(self.loop_dev, params, ctx)
+
+            ret, _out, _err = run_command("umount %s" % mount_path)
+            self.assertEqual(ret, 0)
+
+    @tag_test(TestTags.SLOW, TestTags.CORE)
+    def test_online_encryption(self):
+        """ Verify that online encryption work when a file system is mounted on top of dm-linear """
+        is_luks = BlockDev.crypto_device_is_luks(self.loop_dev)
+        self.assertFalse(is_luks)
+
+        try:
+            ret, _out, _err = run_command("dmsetup create libblockdevTestLUKS --table '0 2097152 linear /dev/sda 0'")
+            self.assertEqual(ret, 0)
+            self.assertTrue(os.path.exists("/dev/mapper/libblockdevTestLUKS"))
+
+            with tempfile.TemporaryDirectory() as mount_path:
+                try:
+                    ret, _out, _err = run_command("mount %s %s" % ("/dev/mapper/libblockdevTestLUKS", mount_path))
+                    self.assertEqual(ret, 0)
+
+                    params = BlockDev.CryptoLUKSReencryptParams(key_size=256, cipher="aes", cipher_mode="cbc-essiv:sha256", offline=False, resilience="datashift")
+                    ctx = BlockDev.CryptoKeyslotContext(passphrase=PASSWD)
+
+                    succ = BlockDev.crypto_luks_encrypt(self.loop_dev, params, ctx)
+                    self.assertTrue(succ)
+                finally:
+                    ret, _out, _err = run_command("umount %s" % mount_path)
+                    self.assertEqual(ret, 0)
+        finally:
+            ret, _out, _err = run_command("dmsetup remove libblockdevTestLUKS")
+            self.assertEqual(ret, 0)
+
+
 
 class CryptoTestLuksSectorSize(CryptoTestCase):
     def setUp(self):
