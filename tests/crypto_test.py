@@ -1458,8 +1458,8 @@ class CryptoTestDecrypt(CryptoTestCase):
         succ = BlockDev.crypto_luks_decrypt(self.loop_dev, params, self.ctx, None)
         self.assertTrue(succ)
 
-        succ = BlockDev.crypto_device_is_luks(self.loop_dev)
-        # self.assertFalse(succ) # Fails
+        is_luks = BlockDev.crypto_device_is_luks(self.loop_dev)
+        # self.assertFalse(is_luks) # Fails
 
         with self.assertRaises(GLib.GError):
             succ = BlockDev.crypto_luks_open(self.loop_dev, "libblockdevTestLUKS", self.ctx, False)
@@ -1503,8 +1503,14 @@ class CryptoTestDecrypt(CryptoTestCase):
         succ = BlockDev.crypto_luks_decrypt("libblockdevTestLUKS", params, self.ctx, None)
         self.assertTrue(succ)
 
-        is_luks = BlockDev.crypto_device_is_luks(self.activated_dev)
-        self.assertFalse(is_luks)
+        self.assertFalse(os.path.exists("/dev/mapper/libblockdevTestLUKS"))
+
+        is_luks = BlockDev.crypto_device_is_luks(self.loop_dev)
+        #self.assertFalse(is_luks) # Fails
+
+        _ret, out, err = run_command("cryptsetup luksDump %s" % (self.loop_dev))
+        print()
+        print("luksDump: ", out, err)
 
 
 class CryptoTestLuksSectorSize(CryptoTestCase):

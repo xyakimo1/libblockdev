@@ -2605,12 +2605,15 @@ gboolean bd_crypto_luks_decrypt (const gchar *device, BDCryptoLUKSReencryptParam
     }
 
     paramsReencrypt.mode = CRYPT_REENCRYPT_DECRYPT;
-    paramsReencrypt.direction = CRYPT_REENCRYPT_FORWARD;
+    paramsReencrypt.direction = CRYPT_REENCRYPT_BACKWARD;
     paramsReencrypt.resilience = params->resilience;
     paramsReencrypt.hash = params->hash;
-    paramsReencrypt.data_shift = 0;
+    // data_shift is unsigned, so it can't shift data backwards, unfortunately.
+    //paramsReencrypt.data_shift = -1 * 16 MiB / SECTOR_SIZE;
     paramsReencrypt.max_hotzone_size = params->max_hotzone_size;
     paramsReencrypt.device_size = 0;
+    // with this flag tests misbehave: `python3: lib/utils_device.c:338: device_open_excl: Assertion `!device_locked(device->lh)' failed.`
+    //paramsReencrypt.flags |= CRYPT_REENCRYPT_MOVE_FIRST_SEGMENT;
     paramsReencrypt.luks2 = &paramsLuks2;
 
     paramsLuks2.sector_size = params->sector_size;
@@ -2623,7 +2626,7 @@ gboolean bd_crypto_luks_decrypt (const gchar *device, BDCryptoLUKSReencryptParam
         bd_utils_log_format (BD_UTILS_LOG_WARNING, "Got empty PBKDF parameters for PBKDF '%s'.", requested_pbkdf);
     }
 
-    /* Initialize reencryption */
+    /* Initialize decryption */
     ret = crypt_reencrypt_init_by_passphrase (cd,
                                               params->offline ? NULL : device,
                                               (const char *) context->u.passphrase.pass_data,
@@ -2658,7 +2661,8 @@ gboolean bd_crypto_luks_decrypt (const gchar *device, BDCryptoLUKSReencryptParam
 
     crypt_free (cd);
     bd_utils_report_finished (progress_id, "Completed.");
-    return TRUE;}
+    return TRUE;
+}
 
 /**
  * bd_crypto_luks_reencrypt_status:
