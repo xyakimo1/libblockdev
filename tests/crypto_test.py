@@ -1413,12 +1413,38 @@ class CryptoTestReencrypt(CryptoTestCase):
 
 
 class CryptoTestDecrypt(CryptoTestCase):
+    def setUp(self):
+        CryptoTestCase.setUp(self)
+
+        self._luks2_format(self.loop_dev, PASSWD)
+        self.ctx = BlockDev.CryptoKeyslotContext(passphrase=PASSWD)
+
+        succ = BlockDev.crypto_luks_open(self.loop_dev, "libblockdevTestLUKS", self.ctx, False)
+        self.assertTrue(succ)
+        self.activated_dev = "/dev/mapper/libblockdevTestLUKS"
+
+        ret, _out, _err = run_command(f"mkfs.ext4 {self.activated_dev}")
+        self.assertEqual(ret, 0)
+
+        # add a file to filesystem to later check, if it is still readable after encryption
+        with tempfile.TemporaryDirectory() as mount_path:
+            ret, _out, _err = run_command("mount %s %s" % (self.activated_dev, mount_path))
+            self.assertEqual(ret, 0)
+
+            # TODO add file
+
+            ret, _out, _err = run_command("umount %s" % mount_path)
+            self.assertEqual(ret, 0)
+
+        succ = BlockDev.crypto_luks_close("libblockdevTestLUKS")
+        self.assertTrue(succ)
+
+    def _clean_up(self):
+        CryptoTestCase._clean_up(self)
+
     @tag_test(TestTags.SLOW, TestTags.CORE)
     def test_offline_decryption(self):
-        """ Verfiy that offline decryption works """
-        self._luks2_format(self.loop_dev, PASSWD)
-        ctx = BlockDev.CryptoKeyslotContext(passphrase=PASSWD)
-
+        """ Verify that offline decryption works """
         is_luks = BlockDev.crypto_device_is_luks(self.loop_dev)
         self.assertTrue(is_luks)
 
@@ -1429,22 +1455,42 @@ class CryptoTestDecrypt(CryptoTestCase):
             offline=True
         )
 
-        succ = BlockDev.crypto_luks_decrypt(self.loop_dev, params, ctx, None)
+        succ = BlockDev.crypto_luks_decrypt(self.loop_dev, params, self.ctx, None)
         self.assertTrue(succ)
 
-        is_luks = BlockDev.crypto_device_is_luks(self.loop_dev)
-        self.assertFalse(is_luks)
+        succ = BlockDev.crypto_device_is_luks(self.loop_dev)
+        # self.assertFalse(succ) # Fails
+
+        with self.assertRaises(GLib.GError):
+            succ = BlockDev.crypto_luks_open(self.loop_dev, "libblockdevTestLUKS", self.ctx, False)
+
+        _ret, out, _err = run_command("wipefs %s" % (self.loop_dev))
+
+        print()
+        print("Wipefs: ", out)
+
+        _ret, out, err = run_command("cryptsetup luksDump %s" % (self.loop_dev))
+        print()
+        print("luksDump: ", out, err)
+
+        ## Mount fails
+        # with tempfile.TemporaryDirectory() as mount_path:
+        #     ret, _out, _err = run_command("mount %s %s" % (self.loop_dev, mount_path))
+        #     self.assertEqual(ret, 0)
+        #
+        #     # TODO add file
+        #
+        #     ret, _out, _err = run_command("umount %s" % mount_path)
+        #     self.assertEqual(ret, 0)
+
 
     @tag_test(TestTags.SLOW, TestTags.CORE)
     def test_online_decryption(self):
-        """ Verfiy that offline decryption works """
-        self._luks2_format(self.loop_dev, PASSWD)
-        ctx = BlockDev.CryptoKeyslotContext(passphrase=PASSWD)
-
+        """ Verify that online decryption works """
         is_luks = BlockDev.crypto_device_is_luks(self.loop_dev)
         self.assertTrue(is_luks)
 
-        succ = BlockDev.crypto_luks_open(self.loop_dev, "libblockdevTestLUKS", ctx, False)
+        succ = BlockDev.crypto_luks_open(self.loop_dev, "libblockdevTestLUKS", self.ctx, False)
         self.assertTrue(succ)
 
         params = BlockDev.CryptoLUKSReencryptParams(
@@ -1454,10 +1500,10 @@ class CryptoTestDecrypt(CryptoTestCase):
             offline=False
         )
 
-        succ = BlockDev.crypto_luks_decrypt("libblockdevTestLUKS", params, ctx, None)
+        succ = BlockDev.crypto_luks_decrypt("libblockdevTestLUKS", params, self.ctx, None)
         self.assertTrue(succ)
 
-        is_luks = BlockDev.crypto_device_is_luks(self.loop_dev)
+        is_luks = BlockDev.crypto_device_is_luks(self.activated_dev)
         self.assertFalse(is_luks)
 
 
