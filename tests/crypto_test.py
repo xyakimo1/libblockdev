@@ -8,6 +8,8 @@ import subprocess
 import locale
 import re
 import tarfile
+import hashlib
+
 
 from utils import create_sparse_tempfile, create_lio_device, delete_lio_device, get_avail_locales, requires_locales, run_command, read_file, TestTags, tag_test
 
@@ -1414,6 +1416,44 @@ class CryptoTestReencrypt(CryptoTestCase):
 
 
 class CryptoTestEncrypt(CryptoTestCase):
+    def compute_checksum(self, directory: str, algorithm='sha256') -> str:
+        # Source: ChatGPT
+        READ_SIZE = 8192 # 8 KB
+        hash_func = hashlib.new(algorithm)
+
+        # Iterate over all files in the directory
+        for root, _, files in os.walk(directory):
+            for file_name in sorted(files):  # Sort files for consistent checksum
+                file_path = os.path.join(root, file_name)
+                try:
+                    with open(file_path, 'rb') as f:
+                        # Read and update the hash for each block of the file
+                        while chunk := f.read(READ_SIZE):
+                            hash_func.update(chunk)
+                except (OSError, IOError) as e:
+                    print(f"Error reading file {file_name}: {e}")
+
+        # Return the final checksum in hexadecimal format
+        return hash_func.hexdigest()
+
+    def fill_fs_with_random_data(self, directory: str):
+        # Source: ChatGPT
+        WRITE_SIZE = 1024 * 1024  # 1MB
+        file_count = 0
+
+        try:
+            while True:
+                file_name = os.path.join(directory, f'randomfile_{file_count}')
+                with open(file_name, 'wb') as f:
+                    # Write random data
+                    f.write(os.urandom(WRITE_SIZE))
+                file_count += 1
+
+        except OSError:
+            pass
+
+        self.assertTrue(file_count > 0)
+
     def setUp(self):
         CryptoTestCase.setUp(self)
 
@@ -1422,31 +1462,33 @@ class CryptoTestEncrypt(CryptoTestCase):
         needed_fs_size = (int) (partition_size / (1024 * 1024)) - 32 # in MB, leave 32 MB for LUKS2 headers
 
         # create filesystem
-        ret, _out, _err = run_command(f"mkfs.ext4 {self.loop_dev}")
-        self.assertEqual(ret, 0)
-        ret, _out, _err = run_command(f"e2fsck -f -y {self.loop_dev}")
-        self.assertEqual(ret, 0)
-        ret, _out, _err = run_command(f"resize2fs {self.loop_dev} {needed_fs_size}M")
+        ret, _out, _err = run_command(f"mkfs.ext4 {self.loop_dev} {needed_fs_size}m")
         self.assertEqual(ret, 0)
 
         # add a file to filesystem to later check, if it is still readable after encryption
         with tempfile.TemporaryDirectory() as mount_path:
-            ret, _out, _err = run_command("mount %s %s" % (self.loop_dev, mount_path))
-            self.assertEqual(ret, 0)
+            try:
+                ret, _out, _err = run_command("mount %s %s" % (self.loop_dev, mount_path))
+                self.assertEqual(ret, 0)
 
-            # TODO add file
-
-            ret, _out, _err = run_command("umount %s" % mount_path)
-            self.assertEqual(ret, 0)
+                self.fill_fs_with_random_data(mount_path)
+                self.fs_hash = self.compute_checksum(mount_path)
+            finally:
+                ret, _out, _err = run_command("umount %s" % mount_path)
+                self.assertEqual(ret, 0)
 
     def _clean_up(self):
         CryptoTestCase._clean_up(self)
+        self.fs_hash = None
 
     @tag_test(TestTags.SLOW, TestTags.CORE)
     def test_offline_encryption(self):
         """ Verify that offline encryption works """
         is_luks = BlockDev.crypto_device_is_luks(self.loop_dev)
         self.assertFalse(is_luks)
+
+        self.assertTrue(self.fs_hash is not None)
+        self.assertTrue(len(self.fs_hash) > 0)
 
         params = BlockDev.CryptoLUKSReencryptParams(key_size=256, cipher="aes", cipher_mode="cbc-essiv:sha256", offline=True, resilience="datashift")
         ctx = BlockDev.CryptoKeyslotContext(passphrase=PASSWD)
@@ -1462,19 +1504,17 @@ class CryptoTestEncrypt(CryptoTestCase):
         self.assertTrue(os.path.exists("/dev/mapper/libblockdevTestLUKS"))
 
         with tempfile.TemporaryDirectory() as mount_path:
-            ret, _out, _err = run_command("cryptsetup luksDump %s" % self.loop_dev)
-            print()
-            print("Cryptsetup: Out:", _out)
-            print("Err:", _err)
+            try:
+                ret, _out, _err = run_command("mount /dev/mapper/libblockdevTestLUKS %s" % mount_path)
+                self.assertEqual(ret, 0)
 
-            ret, _out, _err = run_command("mount /dev/mapper/libblockdevTestLUKS %s" % mount_path)
-            print("mount: Out:", _out)
-            print("Err:", _err)
+                self.assertEqual(self.fs_hash, self.compute_checksum(mount_path))
+                print()
+                print("FS checksum:", self.fs_hash)
 
-            self.assertEqual(ret, 0)
-
-            ret, _out, _err = run_command("umount %s" % mount_path)
-            self.assertEqual(ret, 0)
+            finally:
+                ret, _out, _err = run_command("umount %s" % mount_path)
+                self.assertEqual(ret, 0)
 
     @tag_test(TestTags.SLOW, TestTags.CORE)
     def test_online_encryption_xfail(self):
