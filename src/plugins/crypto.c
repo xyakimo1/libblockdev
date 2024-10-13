@@ -2483,7 +2483,12 @@ gboolean bd_crypto_luks_reencrypt (const gchar *device, BDCryptoLUKSReencryptPar
     paramsReencrypt.luks2 = &paramsLuks2;
 
     paramsLuks2.sector_size = params->sector_size;
-    paramsLuks2.pbkdf = get_pbkdf_params (params->pbkdf, error);
+    if (params->pbkdf == NULL) {
+        paramsLuks2.pbkdf = crypt_get_pbkdf_default (CRYPT_LUKS2);
+    } else {
+        paramsLuks2.pbkdf = get_pbkdf_params (params->pbkdf, error);
+    }
+
     if (paramsLuks2.pbkdf == NULL) {
         /* get info to log */
         if (params->pbkdf != NULL && params->pbkdf->type != NULL) {
