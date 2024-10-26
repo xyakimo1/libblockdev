@@ -2354,6 +2354,8 @@ static int reencryption_progress (uint64_t size, uint64_t offset, void *usrptr) 
     gdouble progress = 10 + (((gdouble) offset / size) * 100) * 0.9;
     bd_utils_report_progress (progress_id, progress, "Reencryption in progress");
 
+    printf("Libblockdev: reencryption progress: %.2f ; Size: %lu, Offset: %lu\n", progress, size, offset);
+
     if (usr_func == NULL)
         return 0;
     return usr_func (size, offset);
@@ -2378,6 +2380,7 @@ static int reencryption_progress (uint64_t size, uint64_t offset, void *usrptr) 
  * Tech category: %BD_CRYPTO_TECH_LUKS-%BD_CRYPTO_TECH_MODE_MODIFY
  */
 gboolean bd_crypto_luks_reencrypt (const gchar *device, BDCryptoLUKSReencryptParams *params, BDCryptoKeyslotContext *context, BDCryptoLUKSReencryptProgFunc prog_func, GError **error) {
+    printf("Hello from libblockdev reencrypt\n");
     struct crypt_device *cd = NULL;
     struct crypt_params_reencrypt paramsReencrypt = {};
     struct crypt_params_luks2 paramsLuks2 = {};
@@ -2454,6 +2457,8 @@ gboolean bd_crypto_luks_reencrypt (const gchar *device, BDCryptoLUKSReencryptPar
         key_size = volume_key_size;
     }
 
+    printf("=== Libblockdev == Before keyslot add.\n");
+
     ret = crypt_keyslot_add_by_key (cd,
                                     CRYPT_ANY_SLOT,
                                     volume_key,
@@ -2472,6 +2477,8 @@ gboolean bd_crypto_luks_reencrypt (const gchar *device, BDCryptoLUKSReencryptPar
     }
     allocated_keyslot = ret;
     bd_utils_report_progress (progress_id, 10, "Added new keyslot");
+
+    printf("=== Libblockdev == Added keyslot.\n");
 
     paramsReencrypt.mode = CRYPT_REENCRYPT_REENCRYPT;
     paramsReencrypt.direction = CRYPT_REENCRYPT_FORWARD;
@@ -2497,6 +2504,8 @@ gboolean bd_crypto_luks_reencrypt (const gchar *device, BDCryptoLUKSReencryptPar
         bd_utils_log_format (BD_UTILS_LOG_WARNING, "Got empty PBKDF parameters for PBKDF '%s'.", requested_pbkdf);
     }
 
+    printf("=== Libblockdev == Before init.\n");
+
     /* Initialize reencryption */
     ret = crypt_reencrypt_init_by_passphrase (cd,
                                               params->offline ? NULL : device,
@@ -2516,11 +2525,15 @@ gboolean bd_crypto_luks_reencrypt (const gchar *device, BDCryptoLUKSReencryptPar
         return FALSE;
     }
 
+    printf("=== Libblockdev == Init OK.\n");
+
     /* marshal to usrptr */
     usrptr.progress_id = progress_id;
     usrptr.usr_func = prog_func;
 
+    printf("=== Libblockdev == Before crypt_reencrypt_run.\n");
     ret = crypt_reencrypt_run (cd, reencryption_progress, &usrptr);
+    printf("=== Libblockdev == After crypt_reencrypt_run.\n");
     if (ret != 0) {
         g_set_error (&l_error, BD_CRYPTO_ERROR, BD_CRYPTO_ERROR_REENCRYPT_FAILED,
                      "Reencryption failed: %s", strerror_l (-ret, c_locale));
@@ -2532,6 +2545,7 @@ gboolean bd_crypto_luks_reencrypt (const gchar *device, BDCryptoLUKSReencryptPar
 
     crypt_free (cd);
     bd_utils_report_finished (progress_id, "Completed.");
+    printf("=== Libblockdev == Goodbye.\n");
     return TRUE;
 }
 
