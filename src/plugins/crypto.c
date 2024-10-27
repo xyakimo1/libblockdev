@@ -2565,7 +2565,6 @@ gboolean bd_crypto_luks_encrypt (const gchar *device, BDCryptoLUKSReencryptParam
     guint key_size = params->key_size / 8; /* convert bits to bytes */
     const char *HEADER_FILE = "/tmp/libblockdev-crypto-luks-encrypt.tmp";
     int allocated_keyslot;
-    gchar *requested_pbkdf = "NULL";
     gint ret, fd = 0;
     guint64 progress_id = 0;
     gchar *msg = NULL;
@@ -2623,19 +2622,7 @@ gboolean bd_crypto_luks_encrypt (const gchar *device, BDCryptoLUKSReencryptParam
 
     paramsLuks2.data_device = device;
     paramsLuks2.sector_size = params->sector_size;
-    if (params->pbkdf == NULL) {
-        paramsLuks2.pbkdf = crypt_get_pbkdf_default (CRYPT_LUKS2);
-    } else {
-        paramsLuks2.pbkdf = get_pbkdf_params (params->pbkdf, error);
-    }
-
-    if (paramsLuks2.pbkdf == NULL) {
-        /* get info to log */
-        if (params->pbkdf != NULL && params->pbkdf->type != NULL) {
-            requested_pbkdf = params->pbkdf->type;
-        }
-        bd_utils_log_format (BD_UTILS_LOG_WARNING, "Got empty PBKDF parameters for PBKDF '%s'.", requested_pbkdf);
-    }
+    paramsLuks2.pbkdf = get_pbkdf_params (params->pbkdf, error);
 
     crypt_set_data_offset (cd, 16 MiB / SECTOR_SIZE);
     ret = crypt_format (cd, CRYPT_LUKS2, params->cipher, params->cipher_mode, NULL, NULL, key_size, &paramsLuks2);
