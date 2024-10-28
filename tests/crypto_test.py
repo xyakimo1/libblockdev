@@ -1431,6 +1431,7 @@ class CryptoTestEncrypt(CryptoTestCase):
                         while chunk := f.read(READ_SIZE):
                             hash_func.update(chunk)
                 except (OSError, IOError) as e:
+                    print()
                     print(f"Error reading file {file_name}: {e}")
 
         # Return the final checksum in hexadecimal format
@@ -1450,6 +1451,7 @@ class CryptoTestEncrypt(CryptoTestCase):
                 file_count += 1
 
         except OSError:
+            # The whole space is filled
             pass
 
         self.assertTrue(file_count > 0)
@@ -1509,8 +1511,6 @@ class CryptoTestEncrypt(CryptoTestCase):
                 self.assertEqual(ret, 0)
 
                 self.assertEqual(self.fs_hash, self.compute_checksum(mount_path))
-                print()
-                print("FS checksum:", self.fs_hash)
 
             finally:
                 ret, _out, _err = run_command("umount %s" % mount_path)

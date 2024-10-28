@@ -2563,7 +2563,8 @@ gboolean bd_crypto_luks_encrypt (const gchar *device, BDCryptoLUKSReencryptParam
     struct reencryption_progress_struct usrptr;
 
     guint key_size = params->key_size / 8; /* convert bits to bytes */
-    const char *HEADER_FILE = "/tmp/libblockdev-crypto-luks-encrypt.tmp";
+    const gchar *HEADER_FILENAME_TEMPLATE = "libblockdev-crypto-luks-encrypt-XXXXXX";
+    gchar *header_file_path = NULL;
     int allocated_keyslot;
     gint ret, fd = 0;
     guint64 progress_id = 0;
@@ -2583,17 +2584,12 @@ gboolean bd_crypto_luks_encrypt (const gchar *device, BDCryptoLUKSReencryptParam
         return FALSE;
     }
 
-    fd = open (HEADER_FILE, O_CREAT|O_EXCL|O_WRONLY, S_IRUSR|S_IWUSR);
+    fd = g_file_open_tmp (HEADER_FILENAME_TEMPLATE, &header_file_path, &l_error);
     if (fd == -1) {
-        if (errno == EEXIST) {
-            g_set_error (&l_error, BD_CRYPTO_ERROR, BD_CRYPTO_ERROR_REENCRYPT_FAILED,
-                         "Failed to create temporary header file: already exists at %s .", HEADER_FILE);
-        } else {
-            g_set_error (&l_error, BD_CRYPTO_ERROR, BD_CRYPTO_ERROR_REENCRYPT_FAILED,
-                         "Failed to create temporary header file.");
-        }
-        bd_utils_report_finished (progress_id, l_error->message);
-        g_propagate_error (error, l_error);
+        g_set_error (error, BD_CRYPTO_ERROR, BD_CRYPTO_ERROR_REENCRYPT_FAILED,
+                     "Failed to create temporary header file: %s", l_error->message);
+        bd_utils_report_finished (progress_id, (*error)->message);
+        g_free (header_file_path);
         crypt_free (cd);
         return FALSE;
     }
@@ -2605,18 +2601,20 @@ gboolean bd_crypto_luks_encrypt (const gchar *device, BDCryptoLUKSReencryptParam
                      "Failed to allocate enough space for temporary header file.");
         bd_utils_report_finished (progress_id, l_error->message);
         g_propagate_error (error, l_error);
-        unlink (HEADER_FILE);
+        unlink (header_file_path);
+        g_free (header_file_path);
         crypt_free (cd);
         return FALSE;
     }
 
-    ret = crypt_init (&cd, HEADER_FILE);
+    ret = crypt_init (&cd, header_file_path);
     if (ret < 0) {
         g_set_error (&l_error, BD_CRYPTO_ERROR, BD_CRYPTO_ERROR_DEVICE,
                      "Failed to initialize device with detached header: %s", strerror_l (-ret, c_locale));
         bd_utils_report_finished (progress_id, l_error->message);
         g_propagate_error (error, l_error);
-        unlink (HEADER_FILE);
+        unlink (header_file_path);
+        g_free (header_file_path);
         return FALSE;
     }
 
@@ -2631,7 +2629,8 @@ gboolean bd_crypto_luks_encrypt (const gchar *device, BDCryptoLUKSReencryptParam
                      "Failed to format a header file: %s", strerror_l (-ret, c_locale));
         bd_utils_report_finished (progress_id, l_error->message);
         g_propagate_error (error, l_error);
-        unlink (HEADER_FILE);
+        unlink (header_file_path);
+        g_free (header_file_path);
         crypt_free (cd);
         return FALSE;
     }
@@ -2648,7 +2647,8 @@ gboolean bd_crypto_luks_encrypt (const gchar *device, BDCryptoLUKSReencryptParam
                      "Failed to add key: %s", strerror_l (-ret, c_locale));
         bd_utils_report_finished (progress_id, l_error->message);
         g_propagate_error (error, l_error);
-        unlink (HEADER_FILE);
+        unlink (header_file_path);
+        g_free (header_file_path);
         crypt_free (cd);
         return FALSE;
     }
@@ -2681,13 +2681,14 @@ gboolean bd_crypto_luks_encrypt (const gchar *device, BDCryptoLUKSReencryptParam
                      "Failed to initialize encryption: %s", strerror_l (-ret, c_locale));
         bd_utils_report_finished (progress_id, l_error->message);
         g_propagate_error (error, l_error);
-        unlink (HEADER_FILE);
+        unlink (header_file_path);
+        g_free (header_file_path);
         crypt_free (cd);
         return FALSE;
     }
 
     /* Set header from temporary file to disk */
-    /*   Re-init without detached header */
+    /*   1/2: Re-init without detached header */
     crypt_free (cd);
     cd = NULL;
     ret = crypt_init (&cd, device);
@@ -2696,18 +2697,20 @@ gboolean bd_crypto_luks_encrypt (const gchar *device, BDCryptoLUKSReencryptParam
                      "Failed to re-initialize device: %s", strerror_l (-ret, c_locale));
         bd_utils_report_finished (progress_id, l_error->message);
         g_propagate_error (error, l_error);
-        unlink (HEADER_FILE);
+        unlink (header_file_path);
+        g_free (header_file_path);
         return FALSE;
     }
 
-    /*   Set header */
-    ret = crypt_header_restore (cd, CRYPT_LUKS2, HEADER_FILE);
+    /*   2/2: Set header */
+    ret = crypt_header_restore (cd, CRYPT_LUKS2, header_file_path);
+    unlink (header_file_path);
+    g_free (header_file_path);
     if (ret < 0) {
         g_set_error (&l_error, BD_CRYPTO_ERROR, BD_CRYPTO_ERROR_DEVICE,
                      "Failed to re-initialize device: %s", strerror_l (-ret, c_locale));
         bd_utils_report_finished (progress_id, l_error->message);
         g_propagate_error (error, l_error);
-        unlink (HEADER_FILE);
         crypt_free (cd);
         return FALSE;
     }
@@ -2729,7 +2732,6 @@ gboolean bd_crypto_luks_encrypt (const gchar *device, BDCryptoLUKSReencryptParam
                      "Failed to re-initialize encryption: %s", strerror_l (-ret, c_locale));
         bd_utils_report_finished (progress_id, l_error->message);
         g_propagate_error (error, l_error);
-        unlink (HEADER_FILE);
         crypt_free (cd);
         return FALSE;
     }
@@ -2748,7 +2750,6 @@ gboolean bd_crypto_luks_encrypt (const gchar *device, BDCryptoLUKSReencryptParam
         return FALSE;
     }
 
-    unlink (HEADER_FILE);
     crypt_free (cd);
     bd_utils_report_finished (progress_id, "Completed.");
     return TRUE;
